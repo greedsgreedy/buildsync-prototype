@@ -1,0 +1,370 @@
+// src/hooks/useStore.js
+// Central state hook — replace with Zustand or Supabase in v2
+
+import { useState, useCallback, useEffect } from 'react';
+import { INSTALLED_MODS, PARTS, minPrice } from '../data';
+
+const DEFAULT_ALERTS = [
+  { id:1, part:'Pure Stage 2 Turbo', type:'restock' },
+  { id:2, part:'Volk TE37 Saga 18x10', type:'drop' },
+  { id:3, part:'Akrapovic Titanium Cat-Back', type:'watch' },
+];
+
+const DEFAULT_VEHICLES = [
+  {
+    id: 1,
+    year: '2021',
+    make: 'Toyota',
+    model: 'Supra',
+    trim: 'A90',
+    type: 'Coupe',
+    engine: 'B58 3.0T',
+    color: 'Nitro Yellow',
+    nickname: 'Nitro A90',
+    bio: 'Street-focused build with clean power, stance, and daily usability.',
+    socials: { instagram:'', tiktok:'', youtube:'', buildThread:'' },
+    fitment: {
+      vin: '',
+      vinDecoded: false,
+      transmission: 'AT8',
+      brakePackage: 'Stock',
+      drivetrain: 'RWD',
+      emissions: 'US',
+    },
+    usageProfile: {
+      style: 'street',
+      climate: 'temperate',
+      currentMileage: 27000,
+    },
+    serviceLog: {
+      oilLast: 24000,
+      brakeFluidLast: 21000,
+      transFluidLast: 15000,
+      coolantLast: 18000,
+    },
+    photos: [],
+    installedMods: INSTALLED_MODS,
+    wishlist: [],
+    alerts: DEFAULT_ALERTS,
+  },
+];
+
+const STORE_KEY = 'buildsync.v1.store';
+const DEFAULT_ACCOUNT = {
+  mode: 'guest',
+  name: 'Guest',
+  email: '',
+  cloudSync: false,
+  lastSyncedAt: '',
+};
+const DEFAULT_CATALOG_FEED = [];
+
+const safeParse = (raw) => {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+};
+
+const readPersistedStore = () => {
+  if (typeof window === 'undefined') return null;
+  const parsed = safeParse(window.localStorage.getItem(STORE_KEY) || '');
+  if (!parsed || parsed.version !== 1) return null;
+  return parsed;
+};
+
+const createInitialState = () => {
+  const persisted = readPersistedStore();
+  if (!persisted) {
+    return {
+      vehicles: DEFAULT_VEHICLES,
+      activeVehicleId: DEFAULT_VEHICLES[0].id,
+      likedBuilds: new Set(),
+      account: DEFAULT_ACCOUNT,
+      catalogFeed: DEFAULT_CATALOG_FEED,
+      appScope: 'supra_bmw',
+    };
+  }
+
+  const vehicles = persisted.vehicles?.length ? persisted.vehicles : DEFAULT_VEHICLES;
+  const firstId = vehicles[0]?.id || DEFAULT_VEHICLES[0].id;
+  const activeVehicleId = vehicles.some(v => v.id === persisted.activeVehicleId)
+    ? persisted.activeVehicleId
+    : firstId;
+
+  return {
+    vehicles,
+    activeVehicleId,
+    likedBuilds: new Set(persisted.likedBuilds || []),
+    account: { ...DEFAULT_ACCOUNT, ...(persisted.account || {}) },
+    catalogFeed: Array.isArray(persisted.catalogFeed) ? persisted.catalogFeed : DEFAULT_CATALOG_FEED,
+    appScope: persisted.appScope || 'supra_bmw',
+  };
+};
+
+export function useStore() {
+  const initial = createInitialState();
+  const [vehicles, setVehicles] = useState(initial.vehicles);
+  const [activeVehicleId, setActiveVehicleId] = useState(initial.activeVehicleId);
+  const [likedBuilds, setLikedBuilds] = useState(initial.likedBuilds);
+  const [account, setAccount] = useState(initial.account);
+  const [catalogFeed, setCatalogFeed] = useState(initial.catalogFeed);
+  const [appScope, setAppScope] = useState(initial.appScope);
+
+  const activeVehicle = vehicles.find(v => v.id === activeVehicleId) || vehicles[0];
+  const installedMods = activeVehicle?.installedMods || [];
+  const wishlist = activeVehicle?.wishlist || [];
+  const alerts = activeVehicle?.alerts || [];
+
+  const updateActiveVehicle = useCallback((updater) => {
+    setVehicles(prev => prev.map(vehicle => (
+      vehicle.id === activeVehicleId ? updater(vehicle) : vehicle
+    )));
+  }, [activeVehicleId]);
+
+  const addVehicle = useCallback((vehicle) => {
+    const id = Date.now();
+    const nextVehicle = {
+      id,
+      year: vehicle.year || '',
+      make: vehicle.make || '',
+      model: vehicle.model || '',
+      trim: vehicle.trim || '',
+      type: vehicle.type || '',
+      engine: vehicle.engine || '',
+      color: vehicle.color || '',
+      nickname: vehicle.nickname || '',
+      bio: vehicle.bio || '',
+      socials: vehicle.socials || { instagram:'', tiktok:'', youtube:'', buildThread:'' },
+      fitment: vehicle.fitment || {
+        vin: '',
+        vinDecoded: false,
+        transmission: 'AT8',
+        brakePackage: 'Stock',
+        drivetrain: 'RWD',
+        emissions: 'US',
+      },
+      usageProfile: vehicle.usageProfile || {
+        style: 'street',
+        climate: 'temperate',
+        currentMileage: 0,
+      },
+      serviceLog: vehicle.serviceLog || {
+        oilLast: 0,
+        brakeFluidLast: 0,
+        transFluidLast: 0,
+        coolantLast: 0,
+      },
+      photos: vehicle.photos || [],
+      installedMods: [],
+      wishlist: [],
+      alerts: [],
+    };
+    setVehicles(prev => [...prev, nextVehicle]);
+    setActiveVehicleId(id);
+  }, []);
+
+  const removeVehicle = useCallback((id) => {
+    setVehicles(prev => {
+      if (prev.length <= 1) return prev;
+      const remaining = prev.filter(vehicle => vehicle.id !== id);
+      if (id === activeVehicleId && remaining.length) {
+        setActiveVehicleId(remaining[0].id);
+      }
+      return remaining;
+    });
+  }, [activeVehicleId]);
+
+  const updateVehicleProfile = useCallback((profile) => {
+    updateActiveVehicle(vehicle => ({
+      ...vehicle,
+      ...profile,
+      socials: { ...vehicle.socials, ...(profile.socials || {}) },
+      fitment: { ...vehicle.fitment, ...(profile.fitment || {}) },
+      usageProfile: { ...vehicle.usageProfile, ...(profile.usageProfile || {}) },
+      serviceLog: { ...vehicle.serviceLog, ...(profile.serviceLog || {}) },
+    }));
+  }, [updateActiveVehicle]);
+
+  const addVehiclePhoto = useCallback((photo) => {
+    updateActiveVehicle(vehicle => ({
+      ...vehicle,
+      photos: [...(vehicle.photos || []), { ...photo, id: Date.now() }],
+    }));
+  }, [updateActiveVehicle]);
+
+  const removeVehiclePhoto = useCallback((id) => {
+    updateActiveVehicle(vehicle => ({
+      ...vehicle,
+      photos: (vehicle.photos || []).filter(photo => photo.id !== id),
+    }));
+  }, [updateActiveVehicle]);
+
+  // --- Wishlist ---
+  const toggleWishlist = useCallback((part) => {
+    updateActiveVehicle(vehicle => {
+      const exists = vehicle.wishlist.find(w => w.id === part.id);
+      const wishlist = exists
+        ? vehicle.wishlist.filter(w => w.id !== part.id)
+        : [...vehicle.wishlist, { id: part.id, name: part.name, price: minPrice(part.vendors), cat: part.cat }];
+      return { ...vehicle, wishlist };
+    });
+  }, [updateActiveVehicle]);
+
+  const removeFromWishlist = useCallback((id) => {
+    updateActiveVehicle(vehicle => ({
+      ...vehicle,
+      wishlist: vehicle.wishlist.filter(w => w.id !== id),
+    }));
+  }, [updateActiveVehicle]);
+
+  const isInWishlist = useCallback((id) => wishlist.some(w => w.id === id), [wishlist]);
+
+  // --- Mods ---
+  const addMod = useCallback((mod) => {
+    updateActiveVehicle(vehicle => ({
+      ...vehicle,
+      installedMods: [...vehicle.installedMods, { ...mod, id: Date.now() }],
+    }));
+  }, [updateActiveVehicle]);
+
+  const removeMod = useCallback((id) => {
+    updateActiveVehicle(vehicle => ({
+      ...vehicle,
+      installedMods: vehicle.installedMods.filter(m => m.id !== id),
+    }));
+  }, [updateActiveVehicle]);
+
+  // --- Alerts ---
+  const addAlert = useCallback((alert) => {
+    updateActiveVehicle(vehicle => ({
+      ...vehicle,
+      alerts: [...vehicle.alerts, { ...alert, id: Date.now() }],
+    }));
+  }, [updateActiveVehicle]);
+
+  const removeAlert = useCallback((id) => {
+    updateActiveVehicle(vehicle => ({
+      ...vehicle,
+      alerts: vehicle.alerts.filter(a => a.id !== id),
+    }));
+  }, [updateActiveVehicle]);
+
+  const quickAlert = useCallback((partName) => {
+    updateActiveVehicle(vehicle => ({
+      ...vehicle,
+      alerts: [...vehicle.alerts, { id: Date.now(), part: partName, type: 'watch' }],
+    }));
+  }, [updateActiveVehicle]);
+
+  // --- Community ---
+  const toggleLike = useCallback((buildId) => {
+    setLikedBuilds(prev => {
+      const next = new Set(prev);
+      if (next.has(buildId)) next.delete(buildId);
+      else next.add(buildId);
+      return next;
+    });
+  }, []);
+
+  // --- Computed ---
+  const totalSpent = installedMods.reduce((s, m) => s + (m.price || 0), 0);
+  const wishlistTotal = wishlist.reduce((s, w) => s + (w.price || 0), 0);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const payload = {
+      version: 1,
+      vehicles,
+      activeVehicleId,
+      likedBuilds: [...likedBuilds],
+      account,
+      catalogFeed,
+      appScope,
+    };
+    window.localStorage.setItem(STORE_KEY, JSON.stringify(payload));
+  }, [vehicles, activeVehicleId, likedBuilds, account, catalogFeed, appScope]);
+
+  const upgradeToAccount = useCallback(({ name, email }) => {
+    setAccount(prev => ({
+      ...prev,
+      mode: 'account',
+      name: name?.trim() || prev.name || 'Driver',
+      email: email?.trim() || prev.email,
+    }));
+  }, []);
+
+  const setGuestMode = useCallback(() => {
+    setAccount(prev => ({ ...prev, mode: 'guest', cloudSync: false }));
+  }, []);
+
+  const toggleCloudSync = useCallback(() => {
+    setAccount(prev => ({
+      ...prev,
+      cloudSync: !prev.cloudSync,
+      lastSyncedAt: new Date().toISOString(),
+    }));
+  }, []);
+
+  const createSyncBundle = useCallback(() => {
+    const payload = {
+      version: 1,
+      createdAt: new Date().toISOString(),
+      account,
+      vehicles,
+      activeVehicleId,
+      likedBuilds: [...likedBuilds],
+    };
+    return btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
+  }, [account, vehicles, activeVehicleId, likedBuilds]);
+
+  const restoreSyncBundle = useCallback((bundle) => {
+    try {
+      const json = decodeURIComponent(escape(atob(bundle.trim())));
+      const parsed = safeParse(json);
+      if (!parsed || parsed.version !== 1 || !Array.isArray(parsed.vehicles) || !parsed.vehicles.length) {
+        return { ok: false, error: 'Invalid bundle' };
+      }
+      setVehicles(parsed.vehicles);
+      setActiveVehicleId(parsed.activeVehicleId || parsed.vehicles[0].id);
+      setLikedBuilds(new Set(parsed.likedBuilds || []));
+      setAccount({ ...DEFAULT_ACCOUNT, ...(parsed.account || {}), lastSyncedAt: new Date().toISOString() });
+      setCatalogFeed(Array.isArray(parsed.catalogFeed) ? parsed.catalogFeed : DEFAULT_CATALOG_FEED);
+      setAppScope(parsed.appScope || 'supra_bmw');
+      return { ok: true };
+    } catch {
+      return { ok: false, error: 'Could not decode bundle' };
+    }
+  }, []);
+
+  const importCatalogFeedRows = useCallback((rows) => {
+    if (!Array.isArray(rows)) return;
+    setCatalogFeed(rows.map((row, idx) => ({
+      id: row.id || `${Date.now()}-${idx}`,
+      part: row.part || row.part_name || '',
+      brand: row.brand || '',
+      vendor: row.vendor || row.vendor_name || '',
+      price: Number(row.price || 0),
+      shipping: Number(row.shipping || 0),
+      url: row.url || row.link || '',
+      fitment: row.fitment || '',
+      updatedAt: row.updatedAt || new Date().toISOString(),
+    })).filter(row => row.part && row.vendor && Number.isFinite(row.price)));
+  }, []);
+
+  const clearCatalogFeed = useCallback(() => setCatalogFeed(DEFAULT_CATALOG_FEED), []);
+
+  return {
+    vehicles, activeVehicle, activeVehicleId, setActiveVehicleId, addVehicle, removeVehicle,
+    updateVehicleProfile, addVehiclePhoto, removeVehiclePhoto,
+    installedMods, addMod, removeMod,
+    wishlist, toggleWishlist, removeFromWishlist, isInWishlist, wishlistTotal,
+    alerts, addAlert, removeAlert, quickAlert,
+    likedBuilds, toggleLike,
+    catalogFeed, importCatalogFeedRows, clearCatalogFeed,
+    appScope, setAppScope,
+    account, upgradeToAccount, setGuestMode, toggleCloudSync, createSyncBundle, restoreSyncBundle,
+    totalSpent,
+  };
+}
