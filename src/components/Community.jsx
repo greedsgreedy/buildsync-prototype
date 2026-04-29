@@ -47,6 +47,7 @@ const FORUM_SEED = [
 
 export default function Community({ store }) {
   const { likedBuilds, toggleLike, activeVehicle, installedMods, totalSpent } = store;
+  const auditAction = store.auditAction;
   const appScope = store.appScope;
   const [subtab, setSubtab] = useState('forum');
   const [filter, setFilter] = useState('all');
@@ -108,8 +109,9 @@ export default function Community({ store }) {
 
   const addListing = () => {
     if (!listingForm.title.trim()) return;
+    const newId = Date.now();
     setListings(prev => [{
-      id: Date.now(),
+      id: newId,
       type: listingForm.type,
       title: listingForm.title,
       price: Number(listingForm.price) || 0,
@@ -118,13 +120,22 @@ export default function Community({ store }) {
       seller: 'You',
       note: listingForm.note || 'No details yet.',
     }, ...prev]);
+    if (typeof auditAction === 'function') {
+      auditAction('marketplace_listing_create', {
+        listingId: newId,
+        type: listingForm.type,
+        title: listingForm.title,
+        fitment: listingForm.fitment || `${activeVehicle.make} ${activeVehicle.model}`,
+      });
+    }
     setListingForm({ type:'Part', title:'', price:'', location:'', fitment:'', note:'' });
   };
 
   const addThread = () => {
     if (!threadForm.title.trim()) return;
+    const newId = Date.now();
     setThreads(prev => [{
-      id: Date.now(),
+      id: newId,
       category: threadForm.category,
       community: communityMake,
       modelBoard: communityBoard,
@@ -138,6 +149,15 @@ export default function Community({ store }) {
       tags: [threadForm.category, communityMake, communityBoard],
       body: threadForm.body || 'No details added yet.',
     }, ...prev]);
+    if (typeof auditAction === 'function') {
+      auditAction('forum_thread_create', {
+        threadId: newId,
+        category: threadForm.category,
+        community: communityMake,
+        board: communityBoard,
+        title: threadForm.title,
+      });
+    }
     setThreadForm({ category:'Build help', title:'', body:'' });
   };
 

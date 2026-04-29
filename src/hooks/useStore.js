@@ -1,7 +1,7 @@
 // src/hooks/useStore.js
 // Central state hook — replace with Zustand or Supabase in v2
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { INSTALLED_MODS, PARTS, minPrice } from '../data';
 import { supabase } from '../lib/supabase';
 
@@ -115,11 +115,22 @@ export function useStore() {
   const [appScope, setAppScope] = useState(initial.appScope);
   const [authUser, setAuthUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const writeGuardRef = useRef(new Map());
 
   const activeVehicle = vehicles.find(v => v.id === activeVehicleId) || vehicles[0];
   const installedMods = activeVehicle?.installedMods || [];
   const wishlist = activeVehicle?.wishlist || [];
   const alerts = activeVehicle?.alerts || [];
+
+  const logAudit = useCallback(async (action, details = {}) => {
+    if (!authUser?.id) return;
+    await supabase.from('audit_logs').insert([{
+      user_id: authUser.id,
+      action,
+      details,
+      created_at: new Date().toISOString(),
+    }]);
+  }, [authUser?.id]);
 
   const updateActiveVehicle = useCallback((updater) => {
     setVehicles(prev => prev.map(vehicle => (
@@ -205,8 +216,17 @@ export function useStore() {
     }));
   }, [updateActiveVehicle]);
 
+  const passWriteGuard = useCallback((key, minGapMs = 300) => {
+    const now = Date.now();
+    const last = writeGuardRef.current.get(key) || 0;
+    if (now - last < minGapMs) return false;
+    writeGuardRef.current.set(key, now);
+    return true;
+  }, []);
+
   // --- Wishlist ---
   const toggleWishlist = useCallback((part) => {
+    if (!passWriteGuard('wishlist:toggle')) return;
     updateActiveVehicle(vehicle => {
       const exists = vehicle.wishlist.find(w => w.id === part.id);
       const wishlist = exists
@@ -214,53 +234,66 @@ export function useStore() {
         : [...vehicle.wishlist, { id: part.id, name: part.name, price: minPrice(part.vendors), cat: part.cat }];
       return { ...vehicle, wishlist };
     });
-  }, [updateActiveVehicle]);
+    logAudit('wishlist_toggle', { vehicleId: activeVehicleId, partId: part.id, name: part.name });
+  }, [updateActiveVehicle, passWriteGuard, logAudit, activeVehicleId]);
 
   const removeFromWishlist = useCallback((id) => {
+    if (!passWriteGuard('wishlist:remove')) return;
     updateActiveVehicle(vehicle => ({
       ...vehicle,
       wishlist: vehicle.wishlist.filter(w => w.id !== id),
     }));
-  }, [updateActiveVehicle]);
+    logAudit('wishlist_remove', { vehicleId: activeVehicleId, partId: id });
+  }, [updateActiveVehicle, passWriteGuard, logAudit, activeVehicleId]);
 
   const isInWishlist = useCallback((id) => wishlist.some(w => w.id === id), [wishlist]);
 
   // --- Mods ---
   const addMod = useCallback((mod) => {
+    if (!passWriteGuard('mod:add')) return;
     updateActiveVehicle(vehicle => ({
       ...vehicle,
       installedMods: [...vehicle.installedMods, { ...mod, id: Date.now() }],
     }));
-  }, [updateActiveVehicle]);
+    logAudit('mod_add', { vehicleId: activeVehicleId, name: mod.name, cat: mod.cat });
+  }, [updateActiveVehicle, passWriteGuard, logAudit, activeVehicleId]);
 
   const removeMod = useCallback((id) => {
+    if (!passWriteGuard('mod:remove')) return;
     updateActiveVehicle(vehicle => ({
       ...vehicle,
       installedMods: vehicle.installedMods.filter(m => m.id !== id),
     }));
-  }, [updateActiveVehicle]);
+    logAudit('mod_remove', { vehicleId: activeVehicleId, modId: id });
+  }, [updateActiveVehicle, passWriteGuard, logAudit, activeVehicleId]);
 
   // --- Alerts ---
   const addAlert = useCallback((alert) => {
+    if (!passWriteGuard('alert:add')) return;
     updateActiveVehicle(vehicle => ({
       ...vehicle,
       alerts: [...vehicle.alerts, { ...alert, id: Date.now() }],
     }));
-  }, [updateActiveVehicle]);
+    logAudit('alert_add', { vehicleId: activeVehicleId, type: alert.type, part: alert.part });
+  }, [updateActiveVehicle, passWriteGuard, logAudit, activeVehicleId]);
 
   const removeAlert = useCallback((id) => {
+    if (!passWriteGuard('alert:remove')) return;
     updateActiveVehicle(vehicle => ({
       ...vehicle,
       alerts: vehicle.alerts.filter(a => a.id !== id),
     }));
-  }, [updateActiveVehicle]);
+    logAudit('alert_remove', { vehicleId: activeVehicleId, alertId: id });
+  }, [updateActiveVehicle, passWriteGuard, logAudit, activeVehicleId]);
 
   const quickAlert = useCallback((partName) => {
+    if (!passWriteGuard('alert:quick')) return;
     updateActiveVehicle(vehicle => ({
       ...vehicle,
       alerts: [...vehicle.alerts, { id: Date.now(), part: partName, type: 'watch' }],
     }));
-  }, [updateActiveVehicle]);
+    logAudit('alert_quick_add', { vehicleId: activeVehicleId, part: partName });
+  }, [updateActiveVehicle, passWriteGuard, logAudit, activeVehicleId]);
 
   // --- Community ---
   const toggleLike = useCallback((buildId) => {
@@ -388,16 +421,6 @@ export function useStore() {
     return { ok: true };
   }, []);
 
-  const logAudit = useCallback(async (action, details = {}) => {
-    if (!authUser?.id) return;
-    await supabase.from('audit_logs').insert([{
-      user_id: authUser.id,
-      action,
-      details,
-      created_at: new Date().toISOString(),
-    }]);
-  }, [authUser?.id]);
-
   const saveCloudGarage = useCallback(async () => {
     if (!authUser?.id) return { ok: false, error: 'Sign in required' };
     const payload = {
@@ -484,6 +507,11 @@ export function useStore() {
     }
   }, [authUser?.id, activeVehicleId, addVehiclePhoto, logAudit]);
 
+  const auditAction = useCallback((action, details = {}) => {
+    if (!passWriteGuard(`audit:${action}`, 200)) return;
+    logAudit(action, details);
+  }, [logAudit, passWriteGuard]);
+
   return {
     vehicles, activeVehicle, activeVehicleId, setActiveVehicleId, addVehicle, removeVehicle,
     updateVehicleProfile, addVehiclePhoto, removeVehiclePhoto,
@@ -494,7 +522,7 @@ export function useStore() {
     catalogFeed, importCatalogFeedRows, clearCatalogFeed,
     appScope, setAppScope,
     account, upgradeToAccount, setGuestMode, toggleCloudSync, createSyncBundle, restoreSyncBundle,
-    authUser, authLoading, signInWithEmailOtp, signOut, saveCloudGarage, loadCloudGarage, uploadVehiclePhoto, logAudit,
+    authUser, authLoading, signInWithEmailOtp, signOut, saveCloudGarage, loadCloudGarage, uploadVehiclePhoto, logAudit, auditAction,
     totalSpent,
   };
 }

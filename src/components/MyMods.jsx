@@ -20,6 +20,7 @@ export default function MyMods({ store }) {
   const { installedMods, addMod, removeMod } = store;
   const [filter, setFilter] = useState('all');
   const [form, setForm] = useState({ name:'', cat:'performance', price:'', date:'', miles:'', brand:'' });
+  const [lastRemoved, setLastRemoved] = useState(null);
 
   const filtered = filter === 'all' ? installedMods : installedMods.filter(m => m.cat === filter);
   const totalSpent = installedMods.reduce((s, m) => s + (m.price || 0), 0);
@@ -28,6 +29,17 @@ export default function MyMods({ store }) {
     if (!form.name.trim()) return;
     addMod({ ...form, price: parseFloat(form.price) || 0 });
     setForm({ name:'', cat:'performance', price:'', date:'', miles:'', brand:'' });
+  };
+
+  const handleRemove = (mod) => {
+    removeMod(mod.id);
+    setLastRemoved(mod);
+  };
+
+  const handleUndo = () => {
+    if (!lastRemoved) return;
+    addMod({ ...lastRemoved });
+    setLastRemoved(null);
   };
 
   return (
@@ -40,6 +52,12 @@ export default function MyMods({ store }) {
         <div className="card-title">
           {filtered.length} mods · ${totalSpent.toLocaleString()} total
         </div>
+        {lastRemoved && (
+          <div className="estimate-note" style={{ marginBottom: 10 }}>
+            Removed "{lastRemoved.name}".
+            <button className="pbtn" style={{ marginLeft: 8 }} onClick={handleUndo}>Undo</button>
+          </div>
+        )}
         {filtered.length === 0 ? (
           <div className="empty-state">No mods in this category</div>
         ) : (
@@ -51,7 +69,7 @@ export default function MyMods({ store }) {
                 <div className="mod-meta">{m.brand} · {m.date} · {m.miles} mi</div>
               </div>
               <div className="mod-price">${m.price?.toLocaleString()}</div>
-              <button className="rm-btn" onClick={() => removeMod(m.id)}>Remove</button>
+              <button className="rm-btn" onClick={() => handleRemove(m)}>Remove</button>
             </div>
           ))
         )}

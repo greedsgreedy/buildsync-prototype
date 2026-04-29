@@ -11,11 +11,23 @@ const TYPE_META = {
 export default function Alerts({ store }) {
   const { alerts, addAlert, removeAlert } = store;
   const [form, setForm] = useState({ part:'', type:'watch' });
+  const [lastRemoved, setLastRemoved] = useState(null);
 
   const handleAdd = () => {
     if (!form.part.trim()) return;
     addAlert({ ...form });
     setForm({ part:'', type:'watch' });
+  };
+
+  const handleRemove = (alertItem) => {
+    removeAlert(alertItem.id);
+    setLastRemoved(alertItem);
+  };
+
+  const handleUndo = () => {
+    if (!lastRemoved) return;
+    addAlert({ part: lastRemoved.part, type: lastRemoved.type });
+    setLastRemoved(null);
   };
 
   return (
@@ -30,6 +42,12 @@ export default function Alerts({ store }) {
       </div>
 
       <div className="card">
+        {lastRemoved && (
+          <div className="estimate-note" style={{ marginBottom: 10 }}>
+            Removed "{lastRemoved.part}" alert.
+            <button className="pbtn" style={{ marginLeft: 8 }} onClick={handleUndo}>Undo</button>
+          </div>
+        )}
         {alerts.length === 0 ? (
           <div className="empty-state">No alerts set yet</div>
         ) : alerts.map(a => {
@@ -59,7 +77,7 @@ export default function Alerts({ store }) {
                   )}
                 </div>
               </div>
-              <button className="rm-btn" onClick={() => removeAlert(a.id)}>Remove</button>
+              <button className="rm-btn" onClick={() => handleRemove(a)}>Remove</button>
             </div>
           );
         })}

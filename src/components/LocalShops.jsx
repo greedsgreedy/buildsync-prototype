@@ -6,16 +6,30 @@ const SPEC_FILTERS = ['all','All vehicles','JDM','Euro','Domestic','Truck','SUV'
 const COUNTRY_FILTERS = ['all','United States','Japan','Germany','United Kingdom','Australia'];
 
 export default function LocalShops({ store }) {
-  const [service, setService] = useState('all');
-  const [specialization, setSpecialization] = useState('all');
+  const [services, setServices] = useState(['all']);
+  const [specializations, setSpecializations] = useState(['all']);
   const [country, setCountry] = useState('all');
   const [location, setLocation] = useState('');
   const [query, setQuery] = useState('');
   const activeVehicle = store.activeVehicle;
 
+  const toggleMulti = (value, selected, setSelected) => {
+    if (value === 'all') {
+      setSelected(['all']);
+      return;
+    }
+    const withoutAll = selected.filter(item => item !== 'all');
+    if (withoutAll.includes(value)) {
+      const next = withoutAll.filter(item => item !== value);
+      setSelected(next.length ? next : ['all']);
+      return;
+    }
+    setSelected([...withoutAll, value]);
+  };
+
   const filtered = useMemo(() => LOCAL_SHOPS.filter(shop => {
-    if (service !== 'all' && !shop.services.includes(service)) return false;
-    if (specialization !== 'all' && !shop.specs.includes(specialization)) return false;
+    if (!services.includes('all') && !services.some(item => shop.services.includes(item))) return false;
+    if (!specializations.includes('all') && !specializations.some(item => shop.specs.includes(item))) return false;
     if (country !== 'all' && shop.country !== country) return false;
     if (query) {
       const q = query.toLowerCase();
@@ -23,13 +37,13 @@ export default function LocalShops({ store }) {
       if (!haystack.includes(q)) return false;
     }
     return true;
-  }), [country, query, service, specialization]);
+  }), [country, query, services, specializations]);
 
   const liveSearch = [
     activeVehicle?.make,
     activeVehicle?.model,
-    service !== 'all' ? service : 'auto shop',
-    specialization !== 'all' ? specialization : '',
+    !services.includes('all') ? services.join(' ') : 'auto shop',
+    !specializations.includes('all') ? specializations.join(' ') : '',
     country !== 'all' ? country : '',
     location || 'near me',
   ].filter(Boolean).join(' ');
@@ -56,7 +70,7 @@ export default function LocalShops({ store }) {
           <div className="filter-label">Service</div>
           <div className="chips-row compact-chips">
             {SERVICE_FILTERS.map(item => (
-              <button key={item} className={`chip ${service===item?'on':''}`} onClick={() => setService(item)}>
+              <button key={item} className={`chip ${services.includes(item)?'on':''}`} onClick={() => toggleMulti(item, services, setServices)}>
                 {item === 'all' ? 'All services' : item}
               </button>
             ))}
@@ -66,7 +80,7 @@ export default function LocalShops({ store }) {
           <div className="filter-label">Specialization</div>
           <div className="chips-row compact-chips">
             {SPEC_FILTERS.map(item => (
-              <button key={item} className={`chip ${specialization===item?'on':''}`} onClick={() => setSpecialization(item)}>
+              <button key={item} className={`chip ${specializations.includes(item)?'on':''}`} onClick={() => toggleMulti(item, specializations, setSpecializations)}>
                 {item === 'all' ? 'All specializations' : item}
               </button>
             ))}
@@ -95,6 +109,18 @@ export default function LocalShops({ store }) {
             <div className="shop-note">{shop.note}</div>
             <div className="list-row"><span className="row-name">Phone</span><span className="row-value">{shop.phone}</span></div>
             <div className="list-row"><span className="row-name">Email</span><span className="row-value">{shop.email}</span></div>
+            <div className="list-row">
+              <span className="row-name">Website</span>
+              <span className="row-value">
+                <a
+                  href={shop.website || `https://www.google.com/search?q=${encodeURIComponent(`${shop.name} ${shop.city}`)}`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  {shop.website ? 'Open website' : 'Search website'}
+                </a>
+              </span>
+            </div>
             <div className="shop-tags">
               {shop.specs.map(spec => <span key={spec}>{spec}</span>)}
             </div>

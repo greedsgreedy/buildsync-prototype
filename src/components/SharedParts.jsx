@@ -3,10 +3,12 @@ import { CROSS_PLATFORM_PARTS } from '../data';
 
 const PLATFORMS = ['all','B58','B58 / BMW DME','ZF 8HP','Toyota/Lexus 2GR','Nissan/Infiniti VQ','Honda/Acura K-Series','Subaru/Toyota FA24','VW/Audi EA888','Hyundai/Kia/Genesis Theta','Cross-brand 5x114.3','Universal / bracket-specific','Universal OBD2','Universal consumable'];
 const CATEGORIES = ['all','Tuning','Turbo','Fueling','Downpipe','Intake / charge air','Intake / maintenance','Intake / engine','Ignition','Drivetrain','Maintenance','Cooling','Exhaust','Suspension','Wheels','Interior / safety','Electronics','Fluids'];
+const vendorSearchLink = (part, vendor) => `https://www.google.com/search?q=${encodeURIComponent(`${vendor} ${part} buy`)}`;
 
 export default function SharedParts({ store }) {
   const [platforms, setPlatforms] = useState(['B58']);
   const [categories, setCategories] = useState(['all']);
+  const [openFilters, setOpenFilters] = useState({ platform: true, category: true });
   const [query, setQuery] = useState('');
   const [onlyGarageRelated, setOnlyGarageRelated] = useState(true);
   const activeVehicle = store.activeVehicle;
@@ -60,8 +62,12 @@ export default function SharedParts({ store }) {
           <span className="search-icon">⌕</span>
           <input className="input search-input" placeholder="Search B58, ZF8, BMW, Supra, turbo, fuel pump..." value={query} onChange={e => setQuery(e.target.value)} />
         </div>
-        <div className="shop-filter-block">
-          <div className="filter-label">Platform</div>
+        <FilterSection
+          title="Platform"
+          value={listLabel(platforms, 'All platforms')}
+          open={openFilters.platform}
+          onToggle={() => setOpenFilters(prev => ({ ...prev, platform: !prev.platform }))}
+        >
           <div className="chips-row compact-chips">
             {PLATFORMS.map(item => (
               <button key={item} className={`chip ${platforms.includes(item)?'on':''}`} onClick={() => toggleMulti(item, platforms, setPlatforms)}>
@@ -69,9 +75,13 @@ export default function SharedParts({ store }) {
               </button>
             ))}
           </div>
-        </div>
-        <div className="shop-filter-block">
-          <div className="filter-label">Category</div>
+        </FilterSection>
+        <FilterSection
+          title="Category"
+          value={listLabel(categories, 'All categories')}
+          open={openFilters.category}
+          onToggle={() => setOpenFilters(prev => ({ ...prev, category: !prev.category }))}
+        >
           <div className="chips-row compact-chips">
             {CATEGORIES.map(item => (
               <button key={item} className={`chip ${categories.includes(item)?'on':''}`} onClick={() => toggleMulti(item, categories, setCategories)}>
@@ -79,7 +89,7 @@ export default function SharedParts({ store }) {
               </button>
             ))}
           </div>
-        </div>
+        </FilterSection>
         <div className="shop-actions">
           <label className="check-line">
             <input type="checkbox" checked={onlyGarageRelated} onChange={e => setOnlyGarageRelated(e.target.checked)} />
@@ -123,7 +133,9 @@ export default function SharedParts({ store }) {
                     <tr key={v.n}>
                       <td className="vn">{v.n}</td>
                       <td className="vp">${v.p.toLocaleString()}</td>
-                      <td className="vs">Verify fitment</td>
+                      <td className="vs">
+                        <a className="pbtn link-btn buy-link-btn" href={vendorSearchLink(part.name, v.n)} target="_blank" rel="noreferrer">Where to buy</a>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -131,12 +143,25 @@ export default function SharedParts({ store }) {
               <div className="shop-actions">
                 <button className="pbtn" onClick={() => alert(`Save shared part: ${part.name}`)}>Save</button>
                 <button className="pbtn" onClick={() => alert(`Compare fitment: ${part.name}`)}>Fitment</button>
-                <button className="pbtn" onClick={() => alert(`Live vendor search: ${part.name}`)}>Vendors</button>
+                <a className="pbtn" href={vendorSearchLink(part.name, part.vendors[0]?.n || part.brand)} target="_blank" rel="noreferrer">Vendors</a>
               </div>
             </div>
           );
         })}
       </div>
+    </div>
+  );
+}
+
+function FilterSection({ title, value, open, onToggle, children }) {
+  return (
+    <div className={`filter-section collapse ${open ? 'open' : ''}`}>
+      <button className="filter-toggle" onClick={onToggle}>
+        <span>{title}</span>
+        <strong>{value}</strong>
+        <em>{open ? '−' : '+'}</em>
+      </button>
+      {open && <div className="filter-body">{children}</div>}
     </div>
   );
 }
