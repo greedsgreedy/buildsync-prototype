@@ -1,5 +1,5 @@
 // src/pages/index.jsx  (Next.js page = route "/")
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Head from 'next/head';
 import { useStore } from '../hooks/useStore';
 import Garage       from '../components/Garage';
@@ -42,8 +42,16 @@ const NAV = [
 
 export default function App() {
   const [tab, setTab] = useState('garage');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const store = useStore();
   const activeVehicle = store.activeVehicle;
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) return null;
 
   const renderTab = () => {
     switch(tab) {
@@ -70,6 +78,9 @@ export default function App() {
 
   // Group nav items for sidebar sections
   const groups = [...new Set(NAV.map(n => n.group))];
+  const mobilePrimary = ['garage', 'parts', 'wishlist', 'community'];
+  const primaryNav = NAV.filter(n => mobilePrimary.includes(n.id));
+  const moreNav = NAV.filter(n => !mobilePrimary.includes(n.id));
 
   return (
     <>
@@ -120,6 +131,38 @@ export default function App() {
             {renderTab()}
           </main>
         </div>
+
+        <nav className="mobile-nav">
+          {primaryNav.map(n => (
+            <button
+              key={n.id}
+              className={`mobile-nav-item ${tab === n.id ? 'active' : ''}`}
+              onClick={() => { setTab(n.id); setMobileMenuOpen(false); }}
+            >
+              <span>{n.icon}</span>
+              <small>{n.label}</small>
+            </button>
+          ))}
+          <button className={`mobile-nav-item ${mobileMenuOpen ? 'active' : ''}`} onClick={() => setMobileMenuOpen(v => !v)}>
+            <span>⋯</span>
+            <small>More</small>
+          </button>
+        </nav>
+
+        {mobileMenuOpen && (
+          <div className="mobile-more-sheet">
+            {moreNav.map(n => (
+              <button
+                key={n.id}
+                className={`mobile-more-item ${tab === n.id ? 'active' : ''}`}
+                onClick={() => { setTab(n.id); setMobileMenuOpen(false); }}
+              >
+                <span>{n.icon}</span>
+                <span>{n.label}</span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     </>
   );

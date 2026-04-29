@@ -904,6 +904,8 @@ html, body {
 .rbar-count { font-size: 12px; color: var(--text2); }
 .sort-sel { width: auto; font-size: 12px; padding: 5px 8px; }
 
+.mobile-nav, .mobile-more-sheet { display: none; }
+
 /* ── SCROLLBAR ────────────────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: var(--s1); }
@@ -912,6 +914,8 @@ html, body {
 /* ── RESPONSIVE ───────────────────────────────────────────────────────── */
 @media (max-width: 768px) {
   .sidebar { display: none; }
+  .shell { height: 100dvh; }
+  .main { padding-bottom: 84px; }
   .stat-grid.four { grid-template-columns: repeat(2, 1fr); }
   .parts-grid { grid-template-columns: 1fr; }
   .shared-grid { grid-template-columns: 1fr; }
@@ -942,4 +946,31 @@ html, body {
   .topbar { align-items: flex-start; height: auto; min-height: 54px; padding-top: 10px; padding-bottom: 10px; flex-wrap: wrap; }
   .car-pill { order: 3; width: 100%; }
   .active-vehicle-actions { align-items: flex-start; flex-direction: column; }
+
+  .mobile-nav {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
+    display: grid; grid-template-columns: repeat(5, 1fr);
+    border-top: 1px solid var(--border); background: var(--s1);
+    padding: 6px 4px calc(6px + env(safe-area-inset-bottom));
+  }
+  .mobile-nav-item {
+    border: 0; background: transparent; color: var(--text2);
+    display: grid; gap: 2px; justify-items: center; padding: 4px 2px;
+    font-family: 'Barlow', sans-serif; font-size: 12px;
+  }
+  .mobile-nav-item small { font-size: 10px; }
+  .mobile-nav-item.active { color: var(--yellow); }
+
+  .mobile-more-sheet {
+    position: fixed; left: 10px; right: 10px; bottom: 64px; z-index: 45;
+    display: grid; gap: 6px; background: var(--s1); border: 1px solid var(--border);
+    border-radius: var(--rl); padding: 8px;
+    max-height: 52dvh; overflow: auto;
+  }
+  .mobile-more-item {
+    border: 1px solid var(--border); background: var(--s2); color: var(--text2);
+    border-radius: var(--r); padding: 8px 10px; text-align: left;
+    display: flex; align-items: center; gap: 8px; font-family: 'Barlow', sans-serif;
+  }
+  .mobile-more-item.active { color: var(--yellow); border-color: rgba(245,200,0,.4); }
 }
