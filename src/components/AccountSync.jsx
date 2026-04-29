@@ -3,10 +3,16 @@ import { useMemo, useState } from 'react';
 export default function AccountSync({ store }) {
   const {
     account,
+    authUser,
+    authLoading,
     vehicles,
     upgradeToAccount,
     setGuestMode,
     toggleCloudSync,
+    signInWithEmailOtp,
+    signOut,
+    saveCloudGarage,
+    loadCloudGarage,
     createSyncBundle,
     restoreSyncBundle,
   } = store;
@@ -30,6 +36,34 @@ export default function AccountSync({ store }) {
     setStatus('Account mode enabled. Local data is now profile-linked on this device.');
   };
 
+  const handleSignIn = async () => {
+    if (!form.email.trim()) {
+      setStatus('Enter your email first.');
+      return;
+    }
+    const result = await signInWithEmailOtp(form.email.trim());
+    setStatus(result.ok ? 'Magic link sent. Open your email and sign in.' : result.error);
+  };
+
+  const handleSignOut = async () => {
+    const result = await signOut();
+    setStatus(result.ok ? 'Signed out.' : result.error);
+  };
+
+  const handleCloudSave = async () => {
+    const result = await saveCloudGarage();
+    setStatus(result.ok ? 'Cloud save complete.' : result.error);
+  };
+
+  const handleCloudLoad = async () => {
+    const result = await loadCloudGarage();
+    if (result.ok && result.empty) {
+      setStatus('No cloud garage yet for this account.');
+      return;
+    }
+    setStatus(result.ok ? 'Cloud garage loaded.' : result.error);
+  };
+
   const handleCreateBundle = () => {
     const next = createSyncBundle();
     setBundle(next);
@@ -46,6 +80,8 @@ export default function AccountSync({ store }) {
       <div className="card">
         <div className="card-title">Account mode</div>
         <div className="list-row"><span className="row-name">Current mode</span><span className="row-value">{account.mode === 'account' ? 'Account' : 'Guest'}</span></div>
+        <div className="list-row"><span className="row-name">Supabase auth</span><span className="row-value">{authLoading ? 'Checking...' : authUser ? 'Signed in' : 'Signed out'}</span></div>
+        {authUser && <div className="list-row"><span className="row-name">User id</span><span className="row-value">{authUser.id.slice(0, 8)}...</span></div>}
         <div className="list-row"><span className="row-name">Profile</span><span className="row-value">{account.name || 'Guest'} {account.email ? `(${account.email})` : ''}</span></div>
         <div className="list-row"><span className="row-name">Cloud sync</span><span className="row-value">{account.cloudSync ? 'Enabled' : 'Disabled'}</span></div>
         <div className="list-row"><span className="row-name">Last sync</span><span className="row-value">{account.lastSyncedAt ? new Date(account.lastSyncedAt).toLocaleString() : 'Not synced yet'}</span></div>
@@ -59,7 +95,11 @@ export default function AccountSync({ store }) {
           <button className="btn btn-yellow span-2" onClick={handleUpgrade}>Use account mode</button>
         </div>
         <div className="shop-actions" style={{marginTop:10}}>
+          <button className="pbtn" onClick={handleSignIn}>Email sign in (magic link)</button>
+          {authUser && <button className="pbtn" onClick={handleSignOut}>Sign out</button>}
           <button className="pbtn" onClick={toggleCloudSync}>{account.cloudSync ? 'Disable cloud sync' : 'Enable cloud sync'}</button>
+          <button className="pbtn" onClick={handleCloudSave}>Save to cloud</button>
+          <button className="pbtn" onClick={handleCloudLoad}>Load from cloud</button>
           <button className="pbtn" onClick={setGuestMode}>Switch to guest</button>
         </div>
         <div className="estimate-note">

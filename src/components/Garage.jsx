@@ -5,7 +5,7 @@ import { MANUFACTURER_MODELS, POPULAR_BRANDS, VEHICLE_TYPES } from '../data';
 export default function Garage({ store, onNavigate }) {
   const {
     vehicles, activeVehicle, activeVehicleId, setActiveVehicleId, addVehicle, removeVehicle,
-    updateVehicleProfile, addVehiclePhoto, removeVehiclePhoto,
+    updateVehicleProfile, addVehiclePhoto, removeVehiclePhoto, uploadVehiclePhoto, logAudit,
     installedMods, totalSpent, wishlist, alerts,
   } = store;
   const [form, setForm] = useState({ year:'', make:'', model:'', trim:'', type:'Coupe', engine:'', color:'' });
@@ -19,6 +19,7 @@ export default function Garage({ store, onNavigate }) {
   });
   const [vinDraft, setVinDraft] = useState(activeVehicle.fitment?.vin || '');
   const [vinSavedFor, setVinSavedFor] = useState('');
+  const [uploadStatus, setUploadStatus] = useState('');
 
   useEffect(() => {
     setProfile({
@@ -60,11 +61,26 @@ export default function Garage({ store, onNavigate }) {
         buildThread: profile.buildThread,
       },
     });
+    if (typeof logAudit === 'function') {
+      logAudit('garage_profile_update', { vehicleId: activeVehicleId });
+    }
   };
 
   const handlePhotoUpload = (event) => {
     const files = Array.from(event.target.files || []);
-    files.forEach(file => {
+    setUploadStatus('');
+    files.forEach(async (file) => {
+      if (typeof uploadVehiclePhoto === 'function') {
+        const result = await uploadVehiclePhoto(file);
+        if (!result.ok) {
+          const url = URL.createObjectURL(file);
+          addVehiclePhoto({ url, name: file.name });
+          setUploadStatus(`Cloud upload skipped: ${result.error}. Saved locally.`);
+        } else {
+          setUploadStatus('Photo uploaded to cloud storage.');
+        }
+        return;
+      }
       const url = URL.createObjectURL(file);
       addVehiclePhoto({ url, name: file.name });
     });
@@ -80,6 +96,9 @@ export default function Garage({ store, onNavigate }) {
       },
     });
     setVinSavedFor(`${activeVehicle.year} ${activeVehicle.make} ${activeVehicle.model} ${activeVehicle.trim}`);
+    if (typeof logAudit === 'function') {
+      logAudit('vin_update', { vehicleId: activeVehicleId, vinLength: clean.length });
+    }
   };
 
   return (
@@ -132,6 +151,7 @@ export default function Garage({ store, onNavigate }) {
               Upload photos
               <input type="file" accept="image/*" multiple onChange={handlePhotoUpload} />
             </label>
+            {uploadStatus && <div className="estimate-note" style={{ marginTop: 8 }}>{uploadStatus}</div>}
           </div>
           <div className="profile-form">
             <input className="input" placeholder="Build nickname" value={profile.nickname} onChange={e => setProfile(p => ({ ...p, nickname:e.target.value }))} />

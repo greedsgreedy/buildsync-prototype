@@ -1,3 +1,5 @@
+import { checkRateLimit } from '../../lib/rateLimit';
+
 function parseCsvLine(line) {
   const out = [];
   let cur = '';
@@ -47,6 +49,12 @@ export default function handler(req, res) {
     res.status(400).json({ error: 'csv text required' });
     return;
   }
+  const ip = req.headers['x-forwarded-for']?.toString().split(',')[0]?.trim() || req.socket?.remoteAddress || 'unknown';
+  const rl = checkRateLimit(`csv:${ip}`, { limit: 20, windowMs: 60_000 });
+  if (!rl.ok) {
+    res.status(429).json({ error: 'Rate limit exceeded. Try again in a minute.' });
+    return;
+  }
   const rows = parseCsv(csv).map((row, idx) => ({
     id: `csv-${Date.now()}-${idx}`,
     part: row.part || row.part_name || row.name || '',
@@ -61,4 +69,3 @@ export default function handler(req, res) {
 
   res.status(200).json({ count: rows.length, rows });
 }
-

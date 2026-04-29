@@ -1,7 +1,7 @@
 import { useState } from 'react';
 
 export default function AdminData({ store }) {
-  const { catalogFeed, importCatalogFeedRows, clearCatalogFeed } = store;
+  const { catalogFeed, importCatalogFeedRows, clearCatalogFeed, logAudit } = store;
   const [csvText, setCsvText] = useState('');
   const [status, setStatus] = useState('');
 
@@ -18,6 +18,9 @@ export default function AdminData({ store }) {
       return;
     }
     importCatalogFeedRows(data.rows);
+    if (typeof logAudit === 'function') {
+      await logAudit('catalog_import', { rows: data.count });
+    }
     setStatus(`Imported ${data.count} rows. Parts catalog pricing updated.`);
   };
 
@@ -33,7 +36,10 @@ export default function AdminData({ store }) {
         />
         <div className="shop-actions" style={{ marginTop: 10 }}>
           <button className="pbtn" onClick={importCsv}>Import CSV</button>
-          <button className="pbtn" onClick={clearCatalogFeed}>Clear feed</button>
+          <button className="pbtn" onClick={async () => {
+            clearCatalogFeed();
+            if (typeof logAudit === 'function') await logAudit('catalog_clear');
+          }}>Clear feed</button>
         </div>
         {status && <div className="estimate-note">{status}</div>}
       </div>
@@ -50,4 +56,3 @@ export default function AdminData({ store }) {
     </div>
   );
 }
-

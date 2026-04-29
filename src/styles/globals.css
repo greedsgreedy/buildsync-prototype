@@ -915,7 +915,7 @@ html, body {
 @media (max-width: 768px) {
   .sidebar { display: none; }
   .shell { height: 100dvh; }
-  .main { padding-bottom: 84px; }
+  .main { padding-bottom: 98px; }
   .stat-grid.four { grid-template-columns: repeat(2, 1fr); }
   .parts-grid { grid-template-columns: 1fr; }
   .shared-grid { grid-template-columns: 1fr; }
@@ -948,18 +948,31 @@ html, body {
   .active-vehicle-actions { align-items: flex-start; flex-direction: column; }
 
   .mobile-nav {
-    position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
+    position: fixed; left: 10px; right: 10px; bottom: calc(8px + env(safe-area-inset-bottom)); z-index: 40;
     display: grid; grid-template-columns: repeat(5, 1fr);
-    border-top: 1px solid var(--border); background: var(--s1);
-    padding: 6px 4px calc(6px + env(safe-area-inset-bottom));
+    border: 1px solid rgba(255,255,255,.1); background: rgba(20,20,22,.92);
+    backdrop-filter: blur(10px);
+    border-radius: 14px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.35);
+    padding: 6px;
   }
   .mobile-nav-item {
-    border: 0; background: transparent; color: var(--text2);
+    border: 1px solid transparent; background: transparent; color: var(--text2);
     display: grid; gap: 2px; justify-items: center; padding: 4px 2px;
-    font-family: 'Barlow', sans-serif; font-size: 12px;
+    font-family: 'Barlow', sans-serif; font-size: 12px; border-radius: 10px;
   }
-  .mobile-nav-item small { font-size: 10px; }
-  .mobile-nav-item.active { color: var(--yellow); }
+  .mobile-nav-item small {
+    font-size: 9px;
+    max-width: 64px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .mobile-nav-item.active {
+    color: var(--yellow);
+    background: rgba(245,200,0,.1);
+    border-color: rgba(245,200,0,.35);
+  }
 
   .mobile-more-sheet {
     position: fixed; left: 10px; right: 10px; bottom: 64px; z-index: 45;

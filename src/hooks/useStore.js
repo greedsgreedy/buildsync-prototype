@@ -3,6 +3,7 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import { INSTALLED_MODS, PARTS, minPrice } from '../data';
+import { supabase } from '../lib/supabase';
 
 const DEFAULT_ALERTS = [
   { id:1, part:'Pure Stage 2 Turbo', type:'restock' },
@@ -58,6 +59,7 @@ const DEFAULT_ACCOUNT = {
   lastSyncedAt: '',
 };
 const DEFAULT_CATALOG_FEED = [];
+const GARAGE_ROW_ID = 'primary';
 
 const safeParse = (raw) => {
   try {
@@ -111,6 +113,8 @@ export function useStore() {
   const [account, setAccount] = useState(initial.account);
   const [catalogFeed, setCatalogFeed] = useState(initial.catalogFeed);
   const [appScope, setAppScope] = useState(initial.appScope);
+  const [authUser, setAuthUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
 
   const activeVehicle = vehicles.find(v => v.id === activeVehicleId) || vehicles[0];
   const installedMods = activeVehicle?.installedMods || [];
@@ -286,6 +290,23 @@ export function useStore() {
     window.localStorage.setItem(STORE_KEY, JSON.stringify(payload));
   }, [vehicles, activeVehicleId, likedBuilds, account, catalogFeed, appScope]);
 
+  useEffect(() => {
+    let mounted = true;
+    supabase.auth.getSession().then(({ data }) => {
+      if (!mounted) return;
+      setAuthUser(data.session?.user || null);
+      setAuthLoading(false);
+    });
+    const { data: authSub } = supabase.auth.onAuthStateChange((_event, session) => {
+      setAuthUser(session?.user || null);
+      setAuthLoading(false);
+    });
+    return () => {
+      mounted = false;
+      authSub.subscription.unsubscribe();
+    };
+  }, []);
+
   const upgradeToAccount = useCallback(({ name, email }) => {
     setAccount(prev => ({
       ...prev,
@@ -355,6 +376,114 @@ export function useStore() {
 
   const clearCatalogFeed = useCallback(() => setCatalogFeed(DEFAULT_CATALOG_FEED), []);
 
+  const signInWithEmailOtp = useCallback(async (email) => {
+    const { error } = await supabase.auth.signInWithOtp({ email });
+    if (error) return { ok: false, error: error.message };
+    return { ok: true };
+  }, []);
+
+  const signOut = useCallback(async () => {
+    const { error } = await supabase.auth.signOut();
+    if (error) return { ok: false, error: error.message };
+    return { ok: true };
+  }, []);
+
+  const logAudit = useCallback(async (action, details = {}) => {
+    if (!authUser?.id) return;
+    await supabase.from('audit_logs').insert([{
+      user_id: authUser.id,
+      action,
+      details,
+      created_at: new Date().toISOString(),
+    }]);
+  }, [authUser?.id]);
+
+  const saveCloudGarage = useCallback(async () => {
+    if (!authUser?.id) return { ok: false, error: 'Sign in required' };
+    const payload = {
+      user_id: authUser.id,
+      garage_id: GARAGE_ROW_ID,
+      vehicles,
+      active_vehicle_id: activeVehicleId,
+      liked_builds: [...likedBuilds],
+      catalog_feed: catalogFeed,
+      app_scope: appScope,
+      updated_at: new Date().toISOString(),
+    };
+    const { error } = await supabase
+      .from('garage_profiles')
+      .upsert(payload, { onConflict: 'user_id,garage_id' });
+    if (error) return { ok: false, error: error.message };
+    await logAudit('garage_save', { vehicleCount: vehicles.length });
+    setAccount(prev => ({ ...prev, cloudSync: true, lastSyncedAt: new Date().toISOString() }));
+    return { ok: true };
+  }, [authUser?.id, vehicles, activeVehicleId, likedBuilds, catalogFeed, appScope, logAudit]);
+
+  const loadCloudGarage = useCallback(async () => {
+    if (!authUser?.id) return { ok: false, error: 'Sign in required' };
+    const { data, error } = await supabase
+      .from('garage_profiles')
+      .select('*')
+      .eq('user_id', authUser.id)
+      .eq('garage_id', GARAGE_ROW_ID)
+      .maybeSingle();
+    if (error) return { ok: false, error: error.message };
+    if (!data) return { ok: true, empty: true };
+    const nextVehicles = Array.isArray(data.vehicles) && data.vehicles.length ? data.vehicles : DEFAULT_VEHICLES;
+    setVehicles(nextVehicles);
+    setActiveVehicleId(data.active_vehicle_id || nextVehicles[0].id);
+    setLikedBuilds(new Set(data.liked_builds || []));
+    setCatalogFeed(Array.isArray(data.catalog_feed) ? data.catalog_feed : DEFAULT_CATALOG_FEED);
+    setAppScope(data.app_scope || 'supra_bmw');
+    setAccount(prev => ({ ...prev, cloudSync: true, lastSyncedAt: new Date().toISOString() }));
+    return { ok: true };
+  }, [authUser?.id]);
+
+  const uploadVehiclePhoto = useCallback(async (file) => {
+    if (!file) return { ok: false, error: 'No file selected' };
+    if (!authUser?.id) return { ok: false, error: 'Sign in required for cloud upload' };
+    if (!file.type.startsWith('image/')) return { ok: false, error: 'Image file required' };
+    const compressImage = (inputFile, maxWidth = 1600, quality = 0.82) => new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        const ratio = Math.min(1, maxWidth / img.width);
+        const w = Math.round(img.width * ratio);
+        const h = Math.round(img.height * ratio);
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return reject(new Error('Canvas unavailable'));
+        ctx.drawImage(img, 0, 0, w, h);
+        canvas.toBlob((blob) => {
+          if (!blob) return reject(new Error('Compression failed'));
+          resolve(blob);
+        }, 'image/jpeg', quality);
+      };
+      img.onerror = () => reject(new Error('Image load failed'));
+      img.src = URL.createObjectURL(inputFile);
+    });
+    try {
+      const compressed = await compressImage(file);
+      if (compressed.size > 4 * 1024 * 1024) {
+        return { ok: false, error: 'Compressed image too large (max 4MB)' };
+      }
+      const path = `${authUser.id}/${activeVehicleId}/${Date.now()}-${Math.random().toString(36).slice(2)}.jpg`;
+      const { error: uploadError } = await supabase.storage.from('vehicle-photos').upload(path, compressed, {
+        contentType: 'image/jpeg',
+        upsert: false,
+      });
+      if (uploadError) return { ok: false, error: uploadError.message };
+      const { data } = supabase.storage.from('vehicle-photos').getPublicUrl(path);
+      const photo = { id: Date.now(), url: data?.publicUrl || '', name: file.name, path };
+      addVehiclePhoto(photo);
+      await logAudit('photo_upload', { vehicleId: activeVehicleId, path, sourceName: file.name });
+      return { ok: true, photo };
+    } catch (error) {
+      return { ok: false, error: error.message || 'Upload failed' };
+    }
+  }, [authUser?.id, activeVehicleId, addVehiclePhoto, logAudit]);
+
   return {
     vehicles, activeVehicle, activeVehicleId, setActiveVehicleId, addVehicle, removeVehicle,
     updateVehicleProfile, addVehiclePhoto, removeVehiclePhoto,
@@ -365,6 +494,7 @@ export function useStore() {
     catalogFeed, importCatalogFeedRows, clearCatalogFeed,
     appScope, setAppScope,
     account, upgradeToAccount, setGuestMode, toggleCloudSync, createSyncBundle, restoreSyncBundle,
+    authUser, authLoading, signInWithEmailOtp, signOut, saveCloudGarage, loadCloudGarage, uploadVehiclePhoto, logAudit,
     totalSpent,
   };
 }

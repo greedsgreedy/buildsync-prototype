@@ -19,6 +19,7 @@ import Maintenance  from '../components/Maintenance';
 import Notifications from '../components/Notifications';
 import Roadmap from '../components/Roadmap';
 import AdminData from '../components/AdminData';
+import { supabase } from '../lib/supabase';
 
 const NAV = [
   { id:'garage',    label:'Garage',        icon:'🏎', group:'overview' },
@@ -44,6 +45,8 @@ export default function App() {
   const [tab, setTab] = useState('garage');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [supabaseTestMsg, setSupabaseTestMsg] = useState('');
+  const [supabaseTesting, setSupabaseTesting] = useState(false);
   const store = useStore();
   const activeVehicle = store.activeVehicle;
 
@@ -52,6 +55,40 @@ export default function App() {
   }, []);
 
   if (!mounted) return null;
+
+  async function runSupabaseTest() {
+    try {
+      setSupabaseTesting(true);
+      setSupabaseTestMsg('Testing Supabase...');
+      const note = `buildsync test ${new Date().toISOString()}`;
+
+      const { error: insertError } = await supabase
+        .from('health_check')
+        .insert([{ note }]);
+
+      if (insertError) {
+        setSupabaseTestMsg(`Insert failed: ${insertError.message}`);
+        return;
+      }
+
+      const { data, error: readError } = await supabase
+        .from('health_check')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (readError) {
+        setSupabaseTestMsg(`Read failed: ${readError.message}`);
+        return;
+      }
+
+      setSupabaseTestMsg(`Success: ${data?.[0]?.note || 'row found'}`);
+    } catch (err) {
+      setSupabaseTestMsg(`Test failed: ${err.message}`);
+    } finally {
+      setSupabaseTesting(false);
+    }
+  }
 
   const renderTab = () => {
     switch(tab) {
@@ -128,6 +165,20 @@ export default function App() {
 
           {/* MAIN CONTENT */}
           <main className="main">
+            {process.env.NODE_ENV === 'development' && (
+              <div className="card" style={{ marginBottom: 12 }}>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <button
+                    className="btn"
+                    onClick={runSupabaseTest}
+                    disabled={supabaseTesting}
+                  >
+                    {supabaseTesting ? 'Testing...' : 'Test Supabase'}
+                  </button>
+                  <span style={{ opacity: 0.85 }}>{supabaseTestMsg || 'Run once to verify Supabase read/write.'}</span>
+                </div>
+              </div>
+            )}
             {renderTab()}
           </main>
         </div>
