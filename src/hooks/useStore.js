@@ -465,7 +465,10 @@ export function useStore() {
   const uploadVehiclePhoto = useCallback(async (file) => {
     if (!file) return { ok: false, error: 'No file selected' };
     if (!authUser?.id) return { ok: false, error: 'Sign in required for cloud upload' };
-    if (!file.type.startsWith('image/')) return { ok: false, error: 'Image file required' };
+    const allowedTypes = ['image/png', 'image/jpeg', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      return { ok: false, error: 'Only PNG, JPG, JPEG, or WEBP files are allowed' };
+    }
     const compressImage = (inputFile, maxWidth = 1600, quality = 0.82) => new Promise((resolve, reject) => {
       const img = new Image();
       img.onload = () => {

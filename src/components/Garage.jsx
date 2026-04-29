@@ -68,8 +68,18 @@ export default function Garage({ store, onNavigate }) {
 
   const handlePhotoUpload = (event) => {
     const files = Array.from(event.target.files || []);
+    const file = files[0];
+    if (!file) return;
+    const allowed = ['image/png', 'image/jpeg', 'image/webp'];
+    if (!allowed.includes(file.type)) {
+      setUploadStatus('Only PNG, JPG, JPEG, or WEBP files are allowed.');
+      event.target.value = '';
+      return;
+    }
     setUploadStatus('');
-    files.forEach(async (file) => {
+    // Single-photo policy: replace existing photo instead of adding multiple.
+    (photos || []).forEach(photo => removeVehiclePhoto(photo.id));
+    (async () => {
       if (typeof uploadVehiclePhoto === 'function') {
         const result = await uploadVehiclePhoto(file);
         if (!result.ok) {
@@ -83,7 +93,7 @@ export default function Garage({ store, onNavigate }) {
       }
       const url = URL.createObjectURL(file);
       addVehiclePhoto({ url, name: file.name });
-    });
+    })();
     event.target.value = '';
   };
 
@@ -148,8 +158,8 @@ export default function Garage({ store, onNavigate }) {
               ))}
             </div>
             <label className="btn btn-full photo-upload">
-              Upload photos
-              <input type="file" accept="image/*" multiple onChange={handlePhotoUpload} />
+              {photos.length ? 'Replace photo' : 'Upload photo'}
+              <input type="file" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp" onChange={handlePhotoUpload} />
             </label>
             {uploadStatus && <div className="estimate-note" style={{ marginTop: 8 }}>{uploadStatus}</div>}
           </div>
