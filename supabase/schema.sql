@@ -55,3 +55,53 @@ drop policy if exists "vehicle photos public read" on storage.objects;
 create policy "vehicle photos public read" on storage.objects
 for select using (bucket_id = 'vehicle-photos');
 
+-- PartScout MVP catalog schema
+create table if not exists public.parts (
+  id bigint generated always as identity primary key,
+  name text not null,
+  category text not null,
+  brand text not null,
+  image_url text,
+  product_url text,
+  vehicle_compatibility jsonb not null default '[]'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.part_prices (
+  id bigint generated always as identity primary key,
+  part_id bigint not null references public.parts(id) on delete cascade,
+  vendor_name text not null,
+  price numeric(12,2) not null check (price >= 0),
+  link text,
+  last_updated timestamptz not null default now(),
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_parts_name on public.parts (name);
+create index if not exists idx_parts_brand on public.parts (brand);
+create index if not exists idx_parts_category on public.parts (category);
+create index if not exists idx_part_prices_part_id on public.part_prices (part_id);
+
+alter table public.parts enable row level security;
+alter table public.part_prices enable row level security;
+
+drop policy if exists "parts public read" on public.parts;
+create policy "parts public read" on public.parts
+for select using (true);
+
+drop policy if exists "part_prices public read" on public.part_prices;
+create policy "part_prices public read" on public.part_prices
+for select using (true);
+
+drop policy if exists "parts auth write" on public.parts;
+create policy "parts auth write" on public.parts
+for all to authenticated
+using (true)
+with check (true);
+
+drop policy if exists "part_prices auth write" on public.part_prices;
+create policy "part_prices auth write" on public.part_prices
+for all to authenticated
+using (true)
+with check (true);

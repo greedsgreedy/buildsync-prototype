@@ -185,6 +185,15 @@ export default function Garage({ store, onNavigate }) {
         </div>
       </div>
 
+      <div className="card partscout-callout">
+        <div>
+          <div className="card-title">PartScout</div>
+          <h3>Find the right parts. Compare everywhere.</h3>
+          <p>Build your car in ModGarage. Find parts with PartScout.</p>
+        </div>
+        <button className="btn btn-yellow" onClick={() => onNavigate('partscout')}>Search parts with PartScout →</button>
+      </div>
+
       <div className="card">
         <div className="card-title">Fitment profile (VIN + trim-aware)</div>
         <div className="form-grid">

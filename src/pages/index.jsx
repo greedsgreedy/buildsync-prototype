@@ -5,6 +5,8 @@ import { useStore } from '../hooks/useStore';
 import Garage       from '../components/Garage';
 import MyMods       from '../components/MyMods';
 import PartsCatalog from '../components/PartsCatalog';
+import SearchParts from '../components/SearchParts';
+import PartScout from '../components/PartScout';
 import Wishlist     from '../components/Wishlist';
 import Calculator   from '../components/Calculator';
 import BudgetPlanner from '../components/BudgetPlanner';
@@ -27,6 +29,8 @@ const NAV = [
   { id:'mods',      label:'My mods',       icon:'🔧', group:'overview' },
   { id:'roadmap',   label:'Roadmap',       icon:'🗺', group:'overview' },
   { id:'admin',     label:'Data admin',    icon:'🧾', group:'overview' },
+  { id:'search',    label:'Search parts',  icon:'⌕',  group:'shopping' },
+  { id:'partscout', label:'PartScout',     icon:'🧠',  group:'shopping' },
   { id:'parts',     label:'Parts catalog', icon:'🛒', group:'shopping' },
   { id:'shared',    label:'Shared parts',  icon:'⇄',  group:'shopping' },
   { id:'wishlist',  label:'Wishlist',       icon:'★',  group:'shopping' },
@@ -97,7 +101,9 @@ export default function App() {
       case 'mods':      return <MyMods    store={store} />;
       case 'roadmap':   return <Roadmap />;
       case 'admin':     return <AdminData store={store} />;
-      case 'parts':     return <PartsCatalog store={store} />;
+      case 'search':    return <SearchParts store={store} onOpenPartScout={() => setTab('partscout')} />;
+      case 'partscout': return <PartScout store={store} />;
+      case 'parts':     return <PartsCatalog store={store} mode="catalog" />;
       case 'shared':    return <SharedParts store={store} />;
       case 'wishlist':  return <Wishlist  store={store} />;
       case 'calculator':return <Calculator store={store} />;
@@ -115,14 +121,14 @@ export default function App() {
 
   // Group nav items for sidebar sections
   const groups = [...new Set(NAV.map(n => n.group))];
-  const mobilePrimary = ['garage', 'parts', 'wishlist', 'community'];
+  const mobilePrimary = ['garage', 'search', 'wishlist', 'community'];
   const primaryNav = NAV.filter(n => mobilePrimary.includes(n.id));
   const moreNav = NAV.filter(n => !mobilePrimary.includes(n.id));
 
   return (
     <>
       <Head>
-        <title>BuildSync — A90 Supra Mod Tracker</title>
+        <title>ModGarage — A90 Supra Mod Tracker</title>
         <meta name="description" content="Track your A90 Supra mods, compare parts and prices, manage your build budget." />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -133,11 +139,12 @@ export default function App() {
       <div className="shell">
         {/* TOP BAR */}
         <header className="topbar">
-          <div className="logo">Build<span>Sync</span></div>
+          <div className="logo">Mod<span>Garage</span></div>
           <div className="car-pill">
             <b>{activeVehicle.year} {activeVehicle.make} {activeVehicle.model} {activeVehicle.trim}</b> · {activeVehicle.engine || 'No engine set'} · {activeVehicle.color || 'No color set'}
           </div>
           <div className="topbar-right">
+            <button className="partscout-top-btn" onClick={() => setTab('partscout')}>Search & compare with <strong>PartScout</strong> →</button>
             <button className="icon-btn" title="Alerts">🔔</button>
             <button className="icon-btn" title="Settings">⚙</button>
           </div>

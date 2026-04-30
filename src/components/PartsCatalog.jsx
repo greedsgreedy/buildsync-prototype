@@ -94,7 +94,7 @@ const partMatchesGarageVehicle = (part, vehicle) => {
   return true;
 };
 
-export default function PartsCatalog({ store }) {
+export default function PartsCatalog({ store, mode = 'catalog' }) {
   const { toggleWishlist, isInWishlist, quickAlert, activeVehicle, catalogFeed, appScope } = store;
   const [cats, setCats] = useState(['all']);
   const [brands, setBrands] = useState(['all']);
@@ -139,6 +139,9 @@ export default function PartsCatalog({ store }) {
       <div className="search-wrap">
         <span className="search-icon">⌕</span>
         <input className="input search-input" placeholder="Search parts, brands, categories..." value={query} onChange={e => setQuery(e.target.value)} />
+      </div>
+      <div className="estimate-note" style={{ marginBottom: 10 }}>
+        ⚡ Press Enter for quick results · 🧠 Use PartScout for deeper comparison
       </div>
 
       <div className="card filter-card">
@@ -277,4 +280,3 @@ function CompareTray({ parts, onRemove, onClear }) {
     </div>
   );
 }
-

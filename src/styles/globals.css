@@ -51,6 +51,18 @@ html, body {
 }
 .car-pill b { color: var(--text); font-weight: 500; }
 .topbar-right { margin-left: auto; display: flex; gap: 7px; }
+.partscout-top-btn {
+  height: 32px;
+  border-radius: var(--r);
+  padding: 0 12px;
+  background: #141416;
+  border: 1px solid var(--yellow);
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.partscout-top-btn strong { color: var(--yellow); }
 .icon-btn {
   width: 32px; height: 32px; border-radius: var(--r);
   background: var(--s2); border: 1px solid var(--border);
@@ -95,6 +107,69 @@ html, body {
   font-family: 'Barlow Condensed', sans-serif; font-size: 11px;
   font-weight: 600; letter-spacing: .1em; text-transform: uppercase;
   color: var(--text2); margin-bottom: 10px;
+}
+.partscout-hero,
+.partscout-callout {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+.partscout-hero h3,
+.partscout-callout h3 {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 28px;
+  line-height: 1.05;
+}
+.partscout-hero p,
+.partscout-callout p {
+  color: var(--text2);
+  margin-top: 6px;
+}
+.quick-search-shell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  background: var(--s2);
+  padding: 0 10px;
+}
+.quick-search-input {
+  border: none !important;
+  background: transparent !important;
+  padding-left: 0 !important;
+}
+.quick-search-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  color: var(--text2);
+  margin-top: 8px;
+}
+.quick-result-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+.quick-result-row:last-child { border-bottom: none; }
+.quick-result-main { min-width: 0; }
+.quick-result-title {
+  font-size: 22px;
+  font-family: 'Barlow Condensed', sans-serif;
+  line-height: 1.05;
+  color: var(--text);
+}
+.quick-result-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
 }
 
 .eyebrow {
@@ -900,6 +975,21 @@ html, body {
 .search-wrap { position: relative; margin-bottom: 12px; }
 .search-icon { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--text2); font-size: 14px; pointer-events: none; }
 .search-input { padding-left: 32px; }
+.partscout-row {
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 10px;
+  background: var(--s2);
+  margin-bottom: 10px;
+}
+.partscout-row:last-child { margin-bottom: 0; }
+.partscout-row-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
 .rbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
 .rbar-count { font-size: 12px; color: var(--text2); }
 .sort-sel { width: auto; font-size: 12px; padding: 5px 8px; }
@@ -946,6 +1036,12 @@ html, body {
   .topbar { align-items: flex-start; height: auto; min-height: 54px; padding-top: 10px; padding-bottom: 10px; flex-wrap: wrap; }
   .car-pill { order: 3; width: 100%; }
   .active-vehicle-actions { align-items: flex-start; flex-direction: column; }
+  .partscout-hero, .partscout-callout { flex-direction: column; align-items: flex-start; }
+  .quick-result-row { align-items: flex-start; }
+  .quick-result-title { font-size: 17px; }
+  .quick-search-meta { flex-direction: column; align-items: flex-start; }
+  .partscout-row-head { flex-direction: column; }
+  .partscout-top-btn { display: none; }
 
   .mobile-nav {
     position: fixed; left: 10px; right: 10px; bottom: calc(8px + env(safe-area-inset-bottom)); z-index: 40;
