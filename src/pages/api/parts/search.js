@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { checkRateLimit } from '../../../lib/rateLimit';
+import { scorePartFitment } from '../../../lib/fitment';
 
 const RESPONSE_CACHE = globalThis.__partScoutSearchCache || new Map();
 globalThis.__partScoutSearchCache = RESPONSE_CACHE;
@@ -17,6 +18,28 @@ function toNumber(value) {
   return Number.isFinite(n) ? n : 0;
 }
 
+function firstQueryValue(value) {
+  if (Array.isArray(value)) return value[0] || '';
+  return value || '';
+}
+
+function buildVehicleContextFromQuery(query) {
+  return {
+    year: firstQueryValue(query.year).toString().trim(),
+    make: firstQueryValue(query.make).toString().trim(),
+    model: firstQueryValue(query.model).toString().trim(),
+    trim: firstQueryValue(query.trim).toString().trim(),
+    engine: firstQueryValue(query.engine).toString().trim(),
+    fitment: {
+      vin: firstQueryValue(query.vin).toString().trim(),
+      transmission: firstQueryValue(query.transmission).toString().trim(),
+      brakePackage: firstQueryValue(query.brakePackage).toString().trim(),
+      drivetrain: firstQueryValue(query.drivetrain).toString().trim(),
+      emissions: firstQueryValue(query.emissions).toString().trim(),
+    },
+  };
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
     res.status(405).json({ error: 'Method not allowed' });
@@ -32,8 +55,19 @@ export default async function handler(req, res) {
 
   const query = (req.query.q || '').toString().trim();
   const skipCache = (req.query.nocache || '').toString() === '1';
+  const vehicleContext = buildVehicleContextFromQuery(req.query);
+  const hasVehicleContext = Boolean(
+    vehicleContext.make ||
+    vehicleContext.model ||
+    vehicleContext.trim ||
+    vehicleContext.engine ||
+    vehicleContext.fitment?.vin
+  );
 
-  const cacheKey = query ? query.toLowerCase() : '__all__';
+  const cacheKey = JSON.stringify({
+    q: query ? query.toLowerCase() : '__all__',
+    vehicle: hasVehicleContext ? vehicleContext : null,
+  });
   const cached = RESPONSE_CACHE.get(cacheKey);
   if (!skipCache && cached && cached.expiresAt > Date.now()) {
     res.setHeader('X-Cache', 'HIT');
@@ -56,12 +90,15 @@ export default async function handler(req, res) {
       brand,
       image_url,
       product_url,
+      updated_at,
       vehicle_compatibility,
       part_prices (
         id,
         vendor_name,
         price,
         link,
+        source_type,
+        quality_score,
         last_updated
       )
     `)
@@ -79,6 +116,34 @@ export default async function handler(req, res) {
     return;
   }
 
+  const partIds = (data || []).map(part => part.id).filter(Boolean);
+  let historyByPart = {};
+  if (partIds.length) {
+    const { data: historyRows, error: historyError } = await supabase
+      .from('price_history')
+      .select('id,part_id,vendor_name,price,source_type,quality_score,captured_at')
+      .in('part_id', partIds)
+      .order('captured_at', { ascending: false })
+      .limit(Math.max(20, partIds.length * 8));
+
+    if (!historyError) {
+      historyByPart = (historyRows || []).reduce((acc, row) => {
+        if (!acc[row.part_id]) acc[row.part_id] = [];
+        if (acc[row.part_id].length < 8) {
+          acc[row.part_id].push({
+            id: row.id,
+            vendor_name: row.vendor_name,
+            price: toNumber(row.price),
+            source_type: row.source_type || 'manual',
+            quality_score: toNumber(row.quality_score),
+            captured_at: row.captured_at,
+          });
+        }
+        return acc;
+      }, {});
+    }
+  }
+
   const parts = (data || []).map((part) => {
     const prices = (part.part_prices || [])
       .map((row) => ({
@@ -86,9 +151,20 @@ export default async function handler(req, res) {
         vendor_name: row.vendor_name,
         price: toNumber(row.price),
         link: row.link || part.product_url || '',
+        source_type: row.source_type || 'manual',
+        quality_score: toNumber(row.quality_score),
         last_updated: row.last_updated,
       }))
       .sort((a, b) => a.price - b.price);
+
+    const fitment = scorePartFitment(part, vehicleContext);
+    const latestUpdate = prices
+      .map((row) => row.last_updated)
+      .filter(Boolean)
+      .sort()
+      .slice(-1)[0] || part.updated_at || null;
+    const topQuality = prices.reduce((best, row) => Math.max(best, toNumber(row.quality_score)), 0);
+    const sourceTypes = [...new Set(prices.map((row) => row.source_type).filter(Boolean))];
 
     return {
       id: part.id,
@@ -97,10 +173,24 @@ export default async function handler(req, res) {
       brand: part.brand,
       image_url: part.image_url,
       product_url: part.product_url,
+      updated_at: part.updated_at,
       vehicle_compatibility: part.vehicle_compatibility || [],
       lowest_price: prices.length ? prices[0].price : null,
       vendors: prices,
+      history: (historyByPart[part.id] || []).slice().reverse(),
+      fitment,
+      last_updated: latestUpdate,
+      source_types: sourceTypes,
+      top_quality_score: topQuality,
     };
+  })
+  .filter((part) => part.fitment.visible);
+
+  parts.sort((a, b) => {
+    if ((b.fitment?.score || 0) !== (a.fitment?.score || 0)) {
+      return (b.fitment?.score || 0) - (a.fitment?.score || 0);
+    }
+    return (a.lowest_price ?? Number.MAX_SAFE_INTEGER) - (b.lowest_price ?? Number.MAX_SAFE_INTEGER);
   });
 
   const grouped = parts.reduce((acc, part) => {
@@ -112,6 +202,7 @@ export default async function handler(req, res) {
 
   const payload = {
     query,
+    vehicle_context: hasVehicleContext ? vehicleContext : null,
     total_results: parts.length,
     groups: Object.keys(grouped).sort().map((category) => ({
       category,

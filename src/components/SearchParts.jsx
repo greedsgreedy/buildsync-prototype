@@ -1,53 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { CAT_META } from '../data';
-
-const BRAND_SCOPE = ['all', 'US Domestic brands', 'JDM', 'Euro', 'Alibaba', 'Temu'];
-const SPECIFIC_BRANDS = ['all', 'Akrapovic', 'AWE', 'Burger', 'Brembo', 'CSF', 'Eibach', 'Enkei', 'GReddy', 'HKS', 'KW', 'Milltek', 'Mishimoto', 'Pure', 'SSR', 'Tomei', 'VRSF', 'Volk', 'Work', 'BMW', 'Toyota', 'Generic'];
-const PART_FILTERS = [
-  'all',
-  'performance',
-  'downpipe',
-  'exhaust',
-  'intercooler',
-  'suspension',
-  'brakes',
-  'exterior',
-  'wheels',
-  'tires',
-  'electronics',
-  'lights',
-  'fueling',
-  'oil',
-  'accessories',
-  'safety',
-  'cooling',
-  'intake',
-  'maintenance',
-  'drivetrain',
-];
-
-const JDM_BRANDS = ['HKS', 'GReddy', 'Tomei', 'Enkei', 'SSR', 'Work', 'Volk', 'Yokohama', 'Nitto', 'Bridgestone', 'Toyota', 'Invidia'];
-const EURO_BRANDS = ['Akrapovic', 'KW', 'Eibach', 'H&R', 'BMW', 'AWE', 'Milltek', 'Brembo', 'Continental', 'Michelin', 'Liqui'];
-
-const titleCase = (value) => (value || '')
-  .split(/[\s_-]+/)
-  .filter(Boolean)
-  .map(v => v.charAt(0).toUpperCase() + v.slice(1))
-  .join(' ');
-
-function inferBrandScope(part) {
-  const brand = (part.brand || '').toLowerCase();
-  const vendorNames = (part.vendors || []).map(v => (v.vendor_name || '').toLowerCase());
-  if (vendorNames.some(v => v.includes('alibaba'))) return 'Alibaba';
-  if (vendorNames.some(v => v.includes('temu'))) return 'Temu';
-  if (JDM_BRANDS.some(v => brand.includes(v.toLowerCase()))) return 'JDM';
-  if (EURO_BRANDS.some(v => brand.includes(v.toLowerCase()))) return 'Euro';
-  return 'US Domestic brands';
-}
+import { BRAND_SCOPE, SPECIFIC_BRANDS, PART_FILTERS, inferBrandScope, titleCase } from '../lib/partscoutFilters';
 
 export default function SearchParts({ store, onOpenPartScout }) {
   const [query, setQuery] = useState('');
-  const [submittedQuery, setSubmittedQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [rows, setRows] = useState([]);
@@ -72,16 +28,12 @@ export default function SearchParts({ store, onOpenPartScout }) {
   };
 
   useEffect(() => {
-    if (!query.trim()) setSubmittedQuery('');
-  }, [query]);
-
-  useEffect(() => {
     const controller = new AbortController();
     const timer = setTimeout(async () => {
       try {
         setLoading(true);
         setError('');
-        const q = (submittedQuery || query).trim();
+        const q = query.trim();
         const qs = q ? `?q=${encodeURIComponent(q)}` : '';
         const response = await fetch(`/api/parts/search${qs}`, { signal: controller.signal });
         const payload = await response.json();
@@ -104,7 +56,7 @@ export default function SearchParts({ store, onOpenPartScout }) {
       clearTimeout(timer);
       controller.abort();
     };
-  }, [query, submittedQuery]);
+  }, [query]);
 
   const brandOptions = useMemo(() => {
     const rowBrands = [...new Set(rows.map(item => item.brand).filter(Boolean))];
@@ -127,16 +79,28 @@ export default function SearchParts({ store, onOpenPartScout }) {
   }), [rows, brandScope, brand, partType]);
 
   const hasActiveFilters = !brand.includes('all') || !partType.includes('all') || !brandScope.includes('all');
+  const hasSearch = Boolean(query.trim());
   const clearFilters = () => {
     setBrand(['all']);
     setPartType(['all']);
     setBrandScope(['all']);
   };
+  const clearSearch = () => {
+    setQuery('');
+    setError('');
+  };
+  const clearAll = () => {
+    clearSearch();
+    clearFilters();
+  };
 
   return (
     <div className="tab-content">
       <div className="card">
-        <div className="card-title">Quick Search</div>
+        <div className="filter-compact-head">
+          <div className="card-title">Quick Search</div>
+          {(hasSearch || hasActiveFilters) && <button className="rm-btn" onClick={clearAll}>Clear all</button>}
+        </div>
         <div className="quick-search-shell">
           <span className="search-icon">⌕</span>
           <input
@@ -144,14 +108,19 @@ export default function SearchParts({ store, onOpenPartScout }) {
             placeholder="Search parts..."
             value={query}
             onChange={e => setQuery(e.target.value)}
-            onKeyDown={e => {
-              if (e.key === 'Enter') setSubmittedQuery(query);
-            }}
           />
+          {hasSearch && (
+            <button className="search-clear-btn" onClick={clearSearch} aria-label="Clear search">
+              ×
+            </button>
+          )}
         </div>
         <div className="quick-search-meta">
-          <span>⚡ Press Enter for quick results</span>
-          <button className="pbtn" onClick={onOpenPartScout}>🧠 Or use PartScout for smarter comparison</button>
+          <span className="quick-search-hint">Start typing for quick results</span>
+          <button className="pbtn quick-search-cta" onClick={onOpenPartScout}>
+            <span className="quick-search-cta-icon">🧠</span>
+            <span>Or use PartScout for smarter comparison</span>
+          </button>
         </div>
         <div className="filter-compact-head" style={{ marginTop: 8 }}>
           <div className="card-title">Filters</div>
@@ -191,7 +160,7 @@ export default function SearchParts({ store, onOpenPartScout }) {
         {loading && <div className="estimate-note">Loading search results...</div>}
         {!loading && error && <div className="estimate-note">Search error: {error}</div>}
         {!loading && !error && filtered.length === 0 && (
-          <div className="estimate-note">No parts matched. Clear filters or search input to reset to all parts.</div>
+          <div className="estimate-note">No parts matched. Try a broader part name, or clear search and filters to reset to the full list.</div>
         )}
         {filtered.map(part => {
           const lowest = Number.isFinite(part.lowest_price) ? part.lowest_price : null;

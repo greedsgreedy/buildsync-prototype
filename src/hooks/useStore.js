@@ -44,6 +44,7 @@ const DEFAULT_VEHICLES = [
       coolantLast: 18000,
     },
     photos: [],
+    comparisonSets: [],
     installedMods: INSTALLED_MODS,
     wishlist: [],
     alerts: DEFAULT_ALERTS,
@@ -121,6 +122,7 @@ export function useStore() {
   const installedMods = activeVehicle?.installedMods || [];
   const wishlist = activeVehicle?.wishlist || [];
   const alerts = activeVehicle?.alerts || [];
+  const comparisonSets = activeVehicle?.comparisonSets || [];
 
   const logAudit = useCallback(async (action, details = {}) => {
     if (!authUser?.id) return;
@@ -172,6 +174,7 @@ export function useStore() {
         coolantLast: 0,
       },
       photos: vehicle.photos || [],
+      comparisonSets: vehicle.comparisonSets || [],
       installedMods: [],
       wishlist: [],
       alerts: [],
@@ -223,6 +226,40 @@ export function useStore() {
     writeGuardRef.current.set(key, now);
     return true;
   }, []);
+
+  const saveComparisonSet = useCallback((set) => {
+    if (!passWriteGuard('comparison:save')) return;
+    updateActiveVehicle(vehicle => {
+      const currentSets = vehicle.comparisonSets || [];
+      const nextSet = {
+        id: Date.now(),
+        name: (set.name || 'Saved comparison').trim(),
+        items: Array.isArray(set.items) ? set.items : [],
+        filters: set.filters || {},
+        query: set.query || '',
+        createdAt: new Date().toISOString(),
+      };
+      const withoutDuplicateName = currentSets.filter(item => item.name !== nextSet.name);
+      return {
+        ...vehicle,
+        comparisonSets: [nextSet, ...withoutDuplicateName].slice(0, 12),
+      };
+    });
+    logAudit('comparison_set_save', {
+      vehicleId: activeVehicleId,
+      name: set.name,
+      itemCount: set.items?.length || 0,
+    });
+  }, [updateActiveVehicle, passWriteGuard, logAudit, activeVehicleId]);
+
+  const removeComparisonSet = useCallback((id) => {
+    if (!passWriteGuard('comparison:remove')) return;
+    updateActiveVehicle(vehicle => ({
+      ...vehicle,
+      comparisonSets: (vehicle.comparisonSets || []).filter(set => set.id !== id),
+    }));
+    logAudit('comparison_set_remove', { vehicleId: activeVehicleId, comparisonSetId: id });
+  }, [updateActiveVehicle, passWriteGuard, logAudit, activeVehicleId]);
 
   // --- Wishlist ---
   const toggleWishlist = useCallback((part) => {
@@ -403,6 +440,8 @@ export function useStore() {
       shipping: Number(row.shipping || 0),
       url: row.url || row.link || '',
       fitment: row.fitment || '',
+      sourceType: row.sourceType || row.source_type || 'csv_feed',
+      qualityScore: Number(row.qualityScore || row.quality_score || 0),
       updatedAt: row.updatedAt || new Date().toISOString(),
     })).filter(row => row.part && row.vendor && Number.isFinite(row.price)));
   }, []);
@@ -521,6 +560,7 @@ export function useStore() {
     installedMods, addMod, removeMod,
     wishlist, toggleWishlist, removeFromWishlist, isInWishlist, wishlistTotal,
     alerts, addAlert, removeAlert, quickAlert,
+    comparisonSets, saveComparisonSet, removeComparisonSet,
     likedBuilds, toggleLike,
     catalogFeed, importCatalogFeedRows, clearCatalogFeed,
     appScope, setAppScope,

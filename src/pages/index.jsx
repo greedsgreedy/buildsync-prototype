@@ -5,7 +5,6 @@ import { useStore } from '../hooks/useStore';
 import Garage       from '../components/Garage';
 import MyMods       from '../components/MyMods';
 import PartsCatalog from '../components/PartsCatalog';
-import SearchParts from '../components/SearchParts';
 import PartScout from '../components/PartScout';
 import Wishlist     from '../components/Wishlist';
 import Calculator   from '../components/Calculator';
@@ -29,8 +28,7 @@ const NAV = [
   { id:'mods',      label:'My mods',       icon:'🔧', group:'overview' },
   { id:'roadmap',   label:'Roadmap',       icon:'🗺', group:'overview' },
   { id:'admin',     label:'Data admin',    icon:'🧾', group:'overview' },
-  { id:'search',    label:'Search parts',  icon:'⌕',  group:'shopping' },
-  { id:'partscout', label:'🧠 PartScout',  icon:'',    group:'shopping' },
+  { id:'partscout', label:'PartScout',    icon:'🧠',  group:'shopping' },
   { id:'parts',     label:'Parts catalog', icon:'🛒', group:'shopping' },
   { id:'shared',    label:'Shared parts',  icon:'⇄',  group:'shopping' },
   { id:'wishlist',  label:'Wishlist',       icon:'★',  group:'shopping' },
@@ -114,9 +112,8 @@ export default function App() {
       case 'mods':      return <MyMods    store={store} />;
       case 'roadmap':   return <Roadmap />;
       case 'admin':     return <AdminData store={store} />;
-      case 'search':    return <SearchParts store={store} onOpenPartScout={() => setTab('partscout')} />;
       case 'partscout': return <PartScout store={store} />;
-      case 'parts':     return <PartsCatalog store={store} mode="catalog" />;
+      case 'parts':     return <PartsCatalog store={store} mode="catalog" onOpenPartScout={() => setTab('partscout')} />;
       case 'shared':    return <SharedParts store={store} />;
       case 'wishlist':  return <Wishlist  store={store} />;
       case 'calculator':return <Calculator store={store} />;
@@ -134,7 +131,7 @@ export default function App() {
 
   // Group nav items for sidebar sections
   const groups = [...new Set(visibleNav.map(n => n.group))];
-  const mobilePrimary = ['garage', 'search', 'wishlist', 'community'];
+  const mobilePrimary = ['garage', 'parts', 'wishlist', 'community'];
   const primaryNav = visibleNav.filter(n => mobilePrimary.includes(n.id));
   const moreNav = visibleNav.filter(n => !mobilePrimary.includes(n.id));
 

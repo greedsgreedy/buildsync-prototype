@@ -1,5 +1,21 @@
 import { useCallback, useEffect, useState } from 'react';
 
+const DEMO_FEEDS = [
+  { label: 'Load A90 Shop feed', file: '/demo_vendor_feed.csv', vendor: 'A90 Shop', source: 'affiliate_feed' },
+  { label: 'Load Turner feed', file: '/turner_vendor_feed.csv', vendor: 'Turner Motorsport', source: 'affiliate_feed' },
+  { label: 'Load FCP Euro feed', file: '/fcpeuro_vendor_feed.csv', vendor: 'FCP Euro', source: 'affiliate_feed' },
+];
+
+function timeAgo(value) {
+  if (!value) return 'Unknown';
+  const then = new Date(value).getTime();
+  if (!Number.isFinite(then)) return 'Unknown';
+  const diffMs = Date.now() - then;
+  const diffHours = Math.max(1, Math.round(diffMs / 3_600_000));
+  if (diffHours < 24) return `${diffHours}h ago`;
+  return `${Math.round(diffHours / 24)}d ago`;
+}
+
 export default function AdminData({ store }) {
   const { catalogFeed, importCatalogFeedRows, clearCatalogFeed, logAudit } = store;
   const [csvText, setCsvText] = useState('');
@@ -33,7 +49,12 @@ export default function AdminData({ store }) {
     });
     const previewData = await previewRes.json();
     if (previewRes.ok) {
-      importCatalogFeedRows(previewData.rows);
+      importCatalogFeedRows((previewData.rows || []).map((row) => ({
+        ...row,
+        sourceType: sourceType,
+        qualityScore: sourceType === 'official_api' ? 95 : sourceType === 'affiliate_feed' ? 80 : sourceType === 'csv_feed' ? 65 : 40,
+        updatedAt: new Date().toISOString(),
+      })));
     }
     if (typeof logAudit === 'function') {
       await logAudit('catalog_import', {
@@ -100,6 +121,26 @@ export default function AdminData({ store }) {
         />
         <div className="shop-actions" style={{ marginTop: 10 }}>
           <button className="pbtn" onClick={importCsv}>Import CSV</button>
+          {DEMO_FEEDS.map((feed) => (
+            <button
+              key={feed.file}
+              className="pbtn"
+              onClick={async () => {
+                try {
+                  const res = await fetch(feed.file);
+                  const text = await res.text();
+                  setCsvText(text);
+                  setVendorName(feed.vendor);
+                  setSourceType(feed.source);
+                  setStatus(`Loaded ${feed.vendor} demo feed into the textarea.`);
+                } catch (err) {
+                  setStatus(err.message || 'Failed to load demo feed');
+                }
+              }}
+            >
+              {feed.label}
+            </button>
+          ))}
           <button className="pbtn" onClick={async () => {
             clearCatalogFeed();
             if (typeof logAudit === 'function') await logAudit('catalog_clear');
@@ -121,6 +162,9 @@ export default function AdminData({ store }) {
           <div key={row.id} className="list-row">
             <span className="row-name">
               {row.vendor_name} · {row.source_type} · {row.status}
+              <div className="estimate-note">
+                last run {timeAgo(row.finished_at || row.started_at)} · {row.duration_ms || 0} ms
+              </div>
             </span>
             <span className="row-value">
               {row.rows_upserted}/{row.rows_seen} · errs {row.error_count}
@@ -133,7 +177,12 @@ export default function AdminData({ store }) {
         <div className="list-row"><span className="row-name">Rows loaded</span><span className="row-value">{catalogFeed.length}</span></div>
         {catalogFeed.slice(0, 8).map(row => (
           <div key={row.id} className="list-row">
-            <span className="row-name">{row.part} · {row.vendor}</span>
+            <span className="row-name">
+              {row.part} · {row.vendor}
+              <div className="estimate-note">
+                {row.sourceType || 'csv_feed'} · Q{row.qualityScore || 0} · updated {timeAgo(row.updatedAt)}
+              </div>
+            </span>
             <span className="row-value">${Number(row.price || 0).toLocaleString()}</span>
           </div>
         ))}

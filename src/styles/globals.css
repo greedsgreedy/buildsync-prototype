@@ -130,6 +130,7 @@ html, body {
   display: flex;
   align-items: center;
   gap: 8px;
+  position: relative;
   border: 1px solid var(--border);
   border-radius: var(--r);
   background: var(--s2);
@@ -139,15 +140,69 @@ html, body {
   border: none !important;
   background: transparent !important;
   padding-left: 0 !important;
+  padding-right: 34px !important;
+}
+.search-clear-btn {
+  border: 0;
+  background: transparent;
+  color: var(--text2);
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  line-height: 1;
+  flex: 0 0 28px;
+}
+.search-clear-btn:hover {
+  background: rgba(255,255,255,.06);
+  color: var(--text);
 }
 .quick-search-meta {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 12px;
   flex-wrap: wrap;
   color: var(--text2);
   margin-top: 8px;
+}
+.quick-search-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.quick-search-hint::before {
+  content: "⚡";
+  color: var(--yellow);
+}
+.quick-search-cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 14px;
+  text-align: center;
+}
+.quick-search-cta-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+}
+.search-wrap {
+  position: relative;
+}
+.search-wrap .search-clear-btn {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
 }
 .quick-result-row {
   display: flex;
@@ -990,6 +1045,150 @@ html, body {
   gap: 10px;
   margin-bottom: 8px;
 }
+.partscout-row-side {
+  display: flex;
+  align-items: flex-end;
+  flex-direction: column;
+  gap: 8px;
+}
+.partscout-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0;
+}
+.fitment-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 4px 9px;
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid var(--border);
+}
+.fitment-direct-fit {
+  color: #88efab;
+  border-color: rgba(136,239,171,.36);
+  background: rgba(89,177,112,.16);
+}
+.fitment-likely-fit {
+  color: #9cc4ff;
+  border-color: rgba(92,148,243,.36);
+  background: rgba(55,138,221,.14);
+}
+.fitment-needs-verification {
+  color: #f0c86d;
+  border-color: rgba(239,159,39,.34);
+  background: rgba(239,159,39,.13);
+}
+.fitment-sub-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 4px 0 8px;
+}
+.fitment-sub-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 3px 8px;
+  font-size: 10px;
+  border: 1px solid var(--border);
+  color: var(--text2);
+  background: var(--s1);
+}
+.fitment-sub-badge-good {
+  color: #8fdca2;
+  border-color: rgba(143,220,162,.28);
+  background: rgba(80,154,98,.12);
+}
+.fitment-sub-badge-warn {
+  color: #efc56f;
+  border-color: rgba(239,197,111,.28);
+  background: rgba(183,132,23,.12);
+}
+.fitment-sub-badge-neutral {
+  color: var(--text2);
+}
+.compare-save-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.saved-set-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+.saved-set-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  background: var(--s2);
+  padding: 9px 10px;
+}
+.saved-set-title {
+  color: var(--text);
+  font-size: 14px;
+}
+.saved-set-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.vendor-trust-line {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  color: var(--text3);
+  font-size: 11px;
+  margin-top: 4px;
+}
+.vendor-meta-cell {
+  display: flex;
+  align-items: flex-end;
+  flex-direction: column;
+  gap: 6px;
+}
+.price-history-card {
+  margin-bottom: 10px;
+  padding: 8px 10px 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(255,255,255,.02);
+}
+.price-history-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.price-history-label {
+  font-size: 11px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--text3);
+}
+.price-history-bars {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10px, 1fr));
+  align-items: end;
+  gap: 5px;
+  min-height: 56px;
+}
+.price-history-bar {
+  width: 100%;
+  min-height: 10px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, var(--yellow), #af8e00);
+  box-shadow: 0 0 0 1px rgba(245,200,0,.15) inset;
+}
 .rbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
 .rbar-count { font-size: 12px; color: var(--text2); }
 .sort-sel { width: auto; font-size: 12px; padding: 5px 8px; }
@@ -1040,8 +1239,14 @@ html, body {
   .quick-result-row { align-items: flex-start; }
   .quick-result-title { font-size: 17px; }
   .quick-search-meta { flex-direction: column; align-items: flex-start; }
+  .quick-search-cta { width: 100%; justify-content: center; }
   .partscout-row-head { flex-direction: column; }
+  .partscout-row-side { width: 100%; align-items: stretch; }
+  .compare-save-row { grid-template-columns: 1fr; }
+  .saved-set-row { flex-direction: column; align-items: flex-start; }
+  .saved-set-actions, .vendor-meta-cell { width: 100%; align-items: stretch; }
   .partscout-top-btn { display: none; }
+  .search-wrap .search-clear-btn { right: 8px; }
 
   .mobile-nav {
     position: fixed; left: 10px; right: 10px; bottom: calc(8px + env(safe-area-inset-bottom)); z-index: 40;

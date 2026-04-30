@@ -1,26 +1,6 @@
 import { useMemo, useState } from 'react';
 import { PARTS, CAT_META, minPrice, getFitmentMeta, getPriceAnalytics } from '../data';
-
-const CATEGORIES = [
-  { value: 'all', label: 'All' },
-  { value: 'performance', label: 'Performance' },
-  { value: 'downpipe', label: 'Downpipes' },
-  { value: 'exhaust', label: 'Exhaust' },
-  { value: 'intercooler', label: 'Intercooler' },
-  { value: 'suspension', label: 'Suspension' },
-  { value: 'brakes', label: 'Brakes' },
-  { value: 'exterior', label: 'Exterior' },
-  { value: 'wheels', label: 'Wheels' },
-  { value: 'tires', label: 'Tires' },
-  { value: 'electronics', label: 'Electronics' },
-  { value: 'lights', label: 'Lights' },
-  { value: 'fueling', label: 'Fueling' },
-  { value: 'oil', label: 'Oil & fluids' },
-  { value: 'accessories', label: 'Accessories' },
-  { value: 'safety', label: 'Safety' },
-];
-
-const BRANDS = ['all', 'Akrapovic', 'AIM', 'Agency Power', 'AWE', 'BC', 'BBS', 'Brembo', 'Bridgestone', 'Bride', 'Burger', 'Castrol', 'Continental', 'CSF', 'Cusco', 'Defi', 'EBC', 'Eibach', 'Enkei', 'Falken', 'GReddy', 'Generic', 'Gram Lights', 'H&R', 'Hawk', 'HKS', 'Injector Dynamics', 'Invidia', 'KW', 'Liqui', 'Michelin', 'Milltek', 'Mishimoto', 'Morimoto', 'Motul', 'MHD', 'NGK', 'Nitto', 'Pure', 'Radium', 'Recaro', 'Seibon', 'Sparco', 'SSR', 'StopTech', 'Tein', 'Tomei', 'Toyota', 'Toyo', 'Volk', 'Wagner', 'Walbro', 'Whiteline', 'Work', 'Yokohama', 'BMW'];
+import { BRAND_SCOPE, SPECIFIC_BRANDS, PART_FILTERS, inferBrandScope, titleCase } from '../lib/partscoutFilters';
 
 const VENDORS = [
   { value: 'all', label: 'All vendors' },
@@ -94,23 +74,37 @@ const partMatchesGarageVehicle = (part, vehicle) => {
   return true;
 };
 
-export default function PartsCatalog({ store, mode = 'catalog' }) {
+export default function PartsCatalog({ store, mode = 'catalog', onOpenPartScout }) {
   const { toggleWishlist, isInWishlist, quickAlert, activeVehicle, catalogFeed, appScope } = store;
   const [cats, setCats] = useState(['all']);
+  const [brandScope, setBrandScope] = useState(['all']);
   const [brands, setBrands] = useState(['all']);
   const [vendors, setVendors] = useState(['all']);
   const [onlyGarageFit, setOnlyGarageFit] = useState(true);
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState('default');
-  const [openFilters, setOpenFilters] = useState({ category: true, brand: false, vendor: false });
+  const [openFilters, setOpenFilters] = useState({ category: true, brand: true, scope: false, vendor: false });
   const [compareParts, setCompareParts] = useState([]);
 
   const catalog = useMemo(() => withCatalogFeed(PARTS, catalogFeed), [catalogFeed]);
   const launchScopeOnly = appScope === 'supra_bmw';
+  const brandOptions = useMemo(() => {
+    const rowBrands = [...new Set(catalog.map(item => item.brand).filter(Boolean))];
+    return [...new Set([...SPECIFIC_BRANDS, ...rowBrands])];
+  }, [catalog]);
+  const partTypes = useMemo(() => {
+    const rowTypes = [...new Set(catalog.map(item => item.cat).filter(Boolean))];
+    return [...new Set([...PART_FILTERS, ...rowTypes])];
+  }, [catalog]);
 
   const filtered = useMemo(() => {
     let parts = catalog.filter(p => {
+      const scope = inferBrandScope({
+        brand: p.brand,
+        vendors: p.vendors?.map(v => ({ vendor_name: v.n })) || [],
+      });
       if (!cats.includes('all') && !cats.includes(p.cat)) return false;
+      if (!brandScope.includes('all') && !brandScope.includes(scope)) return false;
       if (!brands.includes('all') && !brands.includes(p.brand)) return false;
       if (!vendors.includes('all')) {
         const hasAny = vendors.some(vendor => vendor === 'us' ? p.vendors.some(item => item.t === 'us') : p.vendors.some(item => item.t === vendor));
@@ -128,20 +122,55 @@ export default function PartsCatalog({ store, mode = 'catalog' }) {
     if (sort === 'desc') parts = [...parts].sort((a, b) => minPrice(b.vendors) - minPrice(a.vendors));
     if (sort === 'alpha') parts = [...parts].sort((a, b) => a.name.localeCompare(b.name));
     return parts;
-  }, [catalog, cats, brands, vendors, query, sort, onlyGarageFit, activeVehicle, launchScopeOnly]);
+  }, [catalog, cats, brandScope, brands, vendors, query, sort, onlyGarageFit, activeVehicle, launchScopeOnly]);
 
-  const activeCategoryLabel = cats.includes('all') ? '' : listLabel(cats, '', v => CATEGORIES.find(o => o.value === v)?.label || v);
+  const activeCategoryLabel = cats.includes('all') ? '' : listLabel(cats, '', v => titleCase(v));
+  const activeScopeLabel = brandScope.includes('all') ? '' : listLabel(brandScope, '');
   const activeBrandLabel = brands.includes('all') ? '' : listLabel(brands, '');
   const activeVendorLabel = vendors.includes('all') ? '' : listLabel(vendors, '', v => VENDORS.find(o => o.value === v)?.label || v);
+  const hasSearch = Boolean(query.trim());
+  const hasFilters = !cats.includes('all') || !brandScope.includes('all') || !brands.includes('all') || !vendors.includes('all');
+  const clearSearch = () => setQuery('');
+  const clearAll = () => {
+    setQuery('');
+    setCats(['all']);
+    setBrandScope(['all']);
+    setBrands(['all']);
+    setVendors(['all']);
+  };
 
   return (
     <div className="tab-content">
-      <div className="search-wrap">
-        <span className="search-icon">⌕</span>
-        <input className="input search-input" placeholder="Search parts, brands, categories..." value={query} onChange={e => setQuery(e.target.value)} />
-      </div>
-      <div className="estimate-note" style={{ marginBottom: 10 }}>
-        ⚡ Press Enter for quick results · 🧠 Use PartScout for deeper comparison
+      <div className="card">
+        <div className="filter-compact-head">
+          <div className="card-title">Parts Catalog</div>
+          {(hasSearch || hasFilters) && <button className="rm-btn" onClick={clearAll}>Clear all</button>}
+        </div>
+        <div className="quick-search-shell">
+          <span className="search-icon">⌕</span>
+          <input
+            className="input quick-search-input"
+            placeholder="Search parts, brands, categories..."
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+          />
+          {hasSearch && (
+            <button className="search-clear-btn" onClick={clearSearch} aria-label="Clear search">
+              ×
+            </button>
+          )}
+        </div>
+        <div className="quick-search-meta">
+          <span className="quick-search-hint">Browse, filter, and save parts across the full catalog</span>
+          {onOpenPartScout ? (
+            <button className="pbtn quick-search-cta" onClick={onOpenPartScout}>
+              <span className="quick-search-cta-icon">🧠</span>
+              <span>Use PartScout when you want smarter comparison</span>
+            </button>
+          ) : (
+            <span className="estimate-note">Use PartScout when you want deeper vendor and fitment comparison.</span>
+          )}
+        </div>
       </div>
 
       <div className="card filter-card">
@@ -150,29 +179,31 @@ export default function PartsCatalog({ store, mode = 'catalog' }) {
             <div className="card-title">Filters</div>
             <div className="active-filters">
               {activeCategoryLabel && <span>{activeCategoryLabel}</span>}
+              {activeScopeLabel && <span>{activeScopeLabel}</span>}
               {activeBrandLabel && <span>{activeBrandLabel}</span>}
               {activeVendorLabel && <span>{activeVendorLabel}</span>}
             </div>
           </div>
           <div className="shop-actions">
             <label className="check-line"><input type="checkbox" checked={onlyGarageFit} onChange={e => setOnlyGarageFit(e.target.checked)} />Fit selected vehicle</label>
-            {(!cats.includes('all') || !brands.includes('all') || !vendors.includes('all')) && (
-              <button className="rm-btn" onClick={() => { setCats(['all']); setBrands(['all']); setVendors(['all']); }}>Clear</button>
+            {hasFilters && (
+              <button className="rm-btn" onClick={() => { setCats(['all']); setBrandScope(['all']); setBrands(['all']); setVendors(['all']); }}>Clear</button>
             )}
           </div>
         </div>
         <div className="estimate-note">
-          {onlyGarageFit ? `Showing parts that fit your selected garage vehicle (${activeVehicle?.year || ''} ${activeVehicle?.make || ''} ${activeVehicle?.model || ''} ${activeVehicle?.trim || ''}).` : 'Showing all catalog parts regardless of selected vehicle.'}
+          {onlyGarageFit ? `Showing browseable catalog parts that fit your selected garage vehicle (${activeVehicle?.year || ''} ${activeVehicle?.make || ''} ${activeVehicle?.model || ''} ${activeVehicle?.trim || ''}).` : 'Showing the full browseable catalog regardless of selected vehicle.'}
           {launchScopeOnly ? ' Launch mode: Supra + BMW ecosystem focus.' : ''}
         </div>
 
         <FilterSection title="Category" value={activeCategoryLabel} open={openFilters.category} onToggle={() => setOpenFilters(prev => ({ ...prev, category: !prev.category }))}>
-          <div className="chips-row compact-chips">{CATEGORIES.map(o => <button key={o.value} className={`chip ${cats.includes(o.value) ? 'on' : ''}`} onClick={() => toggleMulti(o.value, cats, setCats)}>{o.label}</button>)}</div>
+          <div className="chips-row compact-chips">{partTypes.map(item => <button key={item} className={`chip ${cats.includes(item) ? 'on' : ''}`} onClick={() => toggleMulti(item, cats, setCats)}>{item === 'all' ? 'All parts' : titleCase(item)}</button>)}</div>
         </FilterSection>
-        <FilterSection title="Manufacturer" value={activeBrandLabel} open={openFilters.brand} onToggle={() => setOpenFilters(prev => ({ ...prev, brand: !prev.brand }))}>
-          <select className="input filter-select" value={brands.includes('all') ? 'all' : brands[0]} onChange={e => toggleMulti(e.target.value, brands, setBrands)}>
-            {BRANDS.map(b => <option key={b} value={b}>{b === 'all' ? 'All brands' : b}</option>)}
-          </select>
+        <FilterSection title="Brand scope" value={activeScopeLabel || 'All scopes'} open={openFilters.scope} onToggle={() => setOpenFilters(prev => ({ ...prev, scope: !prev.scope }))}>
+          <div className="chips-row compact-chips">{BRAND_SCOPE.map(scope => <button key={scope} className={`chip ${brandScope.includes(scope) ? 'on' : ''}`} onClick={() => toggleMulti(scope, brandScope, setBrandScope)}>{scope === 'all' ? 'All scopes' : scope}</button>)}</div>
+        </FilterSection>
+        <FilterSection title="Manufacturer" value={activeBrandLabel || 'All brands'} open={openFilters.brand} onToggle={() => setOpenFilters(prev => ({ ...prev, brand: !prev.brand }))}>
+          <div className="chips-row compact-chips">{brandOptions.map(item => <button key={item} className={`chip ${brands.includes(item) ? 'on' : ''}`} onClick={() => toggleMulti(item, brands, setBrands)}>{item === 'all' ? 'All brands' : item}</button>)}</div>
         </FilterSection>
         <FilterSection title="Vendor" value={activeVendorLabel} open={openFilters.vendor} onToggle={() => setOpenFilters(prev => ({ ...prev, vendor: !prev.vendor }))}>
           <div className="chips-row compact-chips">{VENDORS.map(o => <button key={o.value} className={`chip ${vendors.includes(o.value) ? 'on' : ''}`} onClick={() => toggleMulti(o.value, vendors, setVendors)}>{o.label}</button>)}</div>
