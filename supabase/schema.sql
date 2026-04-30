@@ -74,17 +74,49 @@ create table if not exists public.part_prices (
   vendor_name text not null,
   price numeric(12,2) not null check (price >= 0),
   link text,
+  source_type text not null default 'manual',
+  quality_score integer not null default 40 check (quality_score between 0 and 100),
   last_updated timestamptz not null default now(),
   created_at timestamptz not null default now()
+);
+
+create table if not exists public.vendor_sync_runs (
+  id bigint generated always as identity primary key,
+  vendor_name text not null,
+  source_type text not null default 'csv_feed',
+  status text not null check (status in ('running', 'success', 'partial', 'failed')),
+  rows_seen integer not null default 0,
+  rows_upserted integer not null default 0,
+  error_count integer not null default 0,
+  error_summary text,
+  duration_ms integer,
+  started_at timestamptz not null default now(),
+  finished_at timestamptz
+);
+
+create table if not exists public.price_history (
+  id bigint generated always as identity primary key,
+  part_id bigint not null references public.parts(id) on delete cascade,
+  vendor_name text not null,
+  price numeric(12,2) not null check (price >= 0),
+  source_type text not null default 'manual',
+  quality_score integer not null default 40 check (quality_score between 0 and 100),
+  captured_at timestamptz not null default now()
 );
 
 create index if not exists idx_parts_name on public.parts (name);
 create index if not exists idx_parts_brand on public.parts (brand);
 create index if not exists idx_parts_category on public.parts (category);
+create unique index if not exists uq_parts_name_brand on public.parts (name, brand);
 create index if not exists idx_part_prices_part_id on public.part_prices (part_id);
+create unique index if not exists uq_part_vendor_offer on public.part_prices (part_id, vendor_name);
+create index if not exists idx_vendor_sync_runs_vendor_started on public.vendor_sync_runs (vendor_name, started_at desc);
+create index if not exists idx_price_history_part_vendor_time on public.price_history (part_id, vendor_name, captured_at desc);
 
 alter table public.parts enable row level security;
 alter table public.part_prices enable row level security;
+alter table public.vendor_sync_runs enable row level security;
+alter table public.price_history enable row level security;
 
 drop policy if exists "parts public read" on public.parts;
 create policy "parts public read" on public.parts
@@ -102,6 +134,26 @@ with check (true);
 
 drop policy if exists "part_prices auth write" on public.part_prices;
 create policy "part_prices auth write" on public.part_prices
+for all to authenticated
+using (true)
+with check (true);
+
+drop policy if exists "vendor_sync_runs read" on public.vendor_sync_runs;
+create policy "vendor_sync_runs read" on public.vendor_sync_runs
+for select using (true);
+
+drop policy if exists "vendor_sync_runs auth write" on public.vendor_sync_runs;
+create policy "vendor_sync_runs auth write" on public.vendor_sync_runs
+for all to authenticated
+using (true)
+with check (true);
+
+drop policy if exists "price_history read" on public.price_history;
+create policy "price_history read" on public.price_history
+for select using (true);
+
+drop policy if exists "price_history auth write" on public.price_history;
+create policy "price_history auth write" on public.price_history
 for all to authenticated
 using (true)
 with check (true);

@@ -1,6 +1,6 @@
-# BuildSync
+# ModScout
 
-BuildSync is a Next.js prototype for an A90/A91 Supra garage app. It includes a garage dashboard, installed mod tracker, parts catalog, wishlist, cost calculator, budget planner, drop alerts, preview studio, and community builds.
+ModScout is a Next.js prototype for an A90/A91 Supra garage app. It includes a garage dashboard, installed mod tracker, parts catalog, wishlist, cost calculator, budget planner, drop alerts, preview studio, and community builds.
 
 ## Local Development
 

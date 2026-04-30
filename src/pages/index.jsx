@@ -30,7 +30,7 @@ const NAV = [
   { id:'roadmap',   label:'Roadmap',       icon:'🗺', group:'overview' },
   { id:'admin',     label:'Data admin',    icon:'🧾', group:'overview' },
   { id:'search',    label:'Search parts',  icon:'⌕',  group:'shopping' },
-  { id:'partscout', label:'PartScout',     icon:'🧠',  group:'shopping' },
+  { id:'partscout', label:'🧠 PartScout',  icon:'',    group:'shopping' },
   { id:'parts',     label:'Parts catalog', icon:'🛒', group:'shopping' },
   { id:'shared',    label:'Shared parts',  icon:'⇄',  group:'shopping' },
   { id:'wishlist',  label:'Wishlist',       icon:'★',  group:'shopping' },
@@ -53,10 +53,23 @@ export default function App() {
   const [supabaseTesting, setSupabaseTesting] = useState(false);
   const store = useStore();
   const activeVehicle = store.activeVehicle;
+  const adminAllowlist = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || '')
+    .split(',')
+    .map(v => v.trim().toLowerCase())
+    .filter(Boolean);
+  const userEmail = (store.authUser?.email || store.account?.email || '').toLowerCase();
+  const isPrivilegedUser = process.env.NODE_ENV === 'development' || adminAllowlist.includes(userEmail);
+  const visibleNav = NAV.filter(item => (item.id === 'admin' ? isPrivilegedUser : true));
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    if (!isPrivilegedUser && tab === 'admin') {
+      setTab('garage');
+    }
+  }, [isPrivilegedUser, tab]);
 
   if (!mounted) return null;
 
@@ -64,7 +77,7 @@ export default function App() {
     try {
       setSupabaseTesting(true);
       setSupabaseTestMsg('Testing Supabase...');
-      const note = `buildsync test ${new Date().toISOString()}`;
+      const note = `modscout test ${new Date().toISOString()}`;
 
       const { error: insertError } = await supabase
         .from('health_check')
@@ -120,15 +133,15 @@ export default function App() {
   };
 
   // Group nav items for sidebar sections
-  const groups = [...new Set(NAV.map(n => n.group))];
+  const groups = [...new Set(visibleNav.map(n => n.group))];
   const mobilePrimary = ['garage', 'search', 'wishlist', 'community'];
-  const primaryNav = NAV.filter(n => mobilePrimary.includes(n.id));
-  const moreNav = NAV.filter(n => !mobilePrimary.includes(n.id));
+  const primaryNav = visibleNav.filter(n => mobilePrimary.includes(n.id));
+  const moreNav = visibleNav.filter(n => !mobilePrimary.includes(n.id));
 
   return (
     <>
       <Head>
-        <title>ModGarage — A90 Supra Mod Tracker</title>
+        <title>ModScout — A90 Supra Mod Tracker</title>
         <meta name="description" content="Track your A90 Supra mods, compare parts and prices, manage your build budget." />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -139,7 +152,7 @@ export default function App() {
       <div className="shell">
         {/* TOP BAR */}
         <header className="topbar">
-          <div className="logo">Mod<span>Garage</span></div>
+          <div className="logo">Mod<span>Scout</span></div>
           <div className="car-pill">
             <b>{activeVehicle.year} {activeVehicle.make} {activeVehicle.model} {activeVehicle.trim}</b> · {activeVehicle.engine || 'No engine set'} · {activeVehicle.color || 'No color set'}
           </div>
@@ -156,13 +169,13 @@ export default function App() {
             {groups.map(group => (
               <div key={group}>
                 <div className="nav-section">{group}</div>
-                {NAV.filter(n => n.group === group).map(n => (
+                {visibleNav.filter(n => n.group === group).map(n => (
                   <button
                     key={n.id}
                     className={`nav-item ${tab === n.id ? 'active' : ''}`}
                     onClick={() => setTab(n.id)}
                   >
-                    <span className="ni-icon">{n.icon}</span>
+                    {n.icon ? <span className="ni-icon">{n.icon}</span> : null}
                     {n.label}
                   </button>
                 ))}
@@ -197,7 +210,7 @@ export default function App() {
               className={`mobile-nav-item ${tab === n.id ? 'active' : ''}`}
               onClick={() => { setTab(n.id); setMobileMenuOpen(false); }}
             >
-              <span>{n.icon}</span>
+              <span>{n.icon || ''}</span>
               <small>{n.label}</small>
             </button>
           ))}
