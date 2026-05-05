@@ -1,6 +1,7 @@
 // src/components/BudgetPlanner.jsx
 import { useState, useMemo } from 'react';
 import { PARTS, CAT_META, BP_PHASES, minPrice } from '../data';
+import { BUILD_GOALS, DEFAULT_BUILD_GOAL } from '../lib/buildGoals';
 
 const PRI_META = {
   must: { label:'Must have', cls:'pri-must' },
@@ -8,48 +9,18 @@ const PRI_META = {
   nice: { label:'Nice to have', cls:'pri-nice' },
 };
 
-const BUILD_GOALS = {
-  daily: {
-    label: 'Daily driver',
-    note: 'Reliable power, comfort, tires/brakes, and maintenance before spicy stuff.',
-    parts: ['BMS Cold Air Intake','MHD WiFi OBD2 Dongle','MHD Bootmod3 Stage 2 Tune','StopTech Street Brake Pads','Continental ExtremeContact Sport 02 275/35ZR19','Motul 8100 X-cess 5W-40 (5L)','NGK Iridium Spark Plugs (set)','Eibach Pro-Kit Springs'],
-  },
-  touge: {
-    label: 'Touge / canyon',
-    note: 'Cooling, brake feel, suspension balance, and predictable response for twisty roads.',
-    parts: ['Mishimoto Intercooler Kit','KW V3 Coilovers','Cusco Front Strut Brace','Whiteline Front Sway Bar','Cusco Rear Sway Bar','EBC Yellowstuff Pads','Falken Azenis RT660 275/35R18','Volk TE37 Saga 18x10 +34'],
-  },
-  track: {
-    label: 'Track day',
-    note: 'Heat management, stopping power, data, and chassis control before chasing big power.',
-    parts: ['Mishimoto Intercooler Kit','Brembo GT 6-Piston BBK','KW V3 Coilovers','AIM MXS Strada Dash Logger','Yokohama Advan A052 275/35R18','Bridgestone Potenza RE-71RS 275/35R18','Defi Boost + Oil Temp Gauges','Motul 8100 X-cess 5W-40 (5L)','Sparco Pro 2000 Bucket Seat'],
-  },
-  drag: {
-    label: 'Drag / roll racing',
-    note: 'Power adders and supporting fuel/cooling. Budget extra for tuning and drivetrain health.',
-    parts: ['Pure Stage 2 Turbo','High-Flow Fuel Injectors (x6)','Walbro 450 Fuel Pump','Mishimoto Intercooler Kit','DP Race 3" Catless Downpipe','Nitto NT555RII Drag Radial 305/35R18','MHD Bootmod3 Stage 2 Tune','Defi Boost + Oil Temp Gauges'],
-  },
-  show: {
-    label: 'Show / street presence',
-    note: 'Visual impact, stance, wheels, lighting, and interior details.',
-    parts: ['Seibon Carbon Fibre Hood','Carbon Fibre Front Splitter','Morimoto XB LED Headlights','Volk CE28N 18x9.5','Bride Zeta IV Bucket Seat','GR Supra OEM Floor Mats','Rocket Bunny Widebody Kit'],
-  },
-  starter: {
-    label: 'Budget starter',
-    note: 'Low-cost foundation parts that make the car feel better without blowing the build fund.',
-    parts: ['BMS Cold Air Intake','MHD WiFi OBD2 Dongle','StopTech Street Brake Pads','Falken Azenis RT660 275/35R18','Motul 8100 X-cess 5W-40 (5L)','GR Supra OEM Floor Mats','Cusco Front Strut Brace'],
-  },
-};
-
-export default function BudgetPlanner() {
+export default function BudgetPlanner({ store }) {
+  const activeVehicle = store?.activeVehicle;
+  const setBuildGoal = store?.setBuildGoal;
   const [budget, setBudget]       = useState(10000);
   const [catFilter, setCatFilter] = useState('all');
   const [priFilter, setPriFilter] = useState('all');
   const [phase, setPhase]         = useState(1);
-  const [goal, setGoal]           = useState('daily');
+  const [goalLocal, setGoalLocal] = useState(activeVehicle?.buildGoal || DEFAULT_BUILD_GOAL);
   const [checked, setChecked]     = useState(new Set());
   const [customs, setCustoms]     = useState([]);
   const [customForm, setCustomForm] = useState({ name:'', price:'', cat:'performance', pri:'must' });
+  const goal = activeVehicle?.buildGoal || goalLocal || DEFAULT_BUILD_GOAL;
 
   // All parts = catalog + customs
   const allParts = useMemo(() => [
@@ -134,6 +105,10 @@ export default function BudgetPlanner() {
   const applyGoal = () => {
     setChecked(prev => new Set([...prev, ...recommendedParts.map(p => p.id)]));
   };
+  const chooseGoal = (key) => {
+    setGoalLocal(key);
+    setBuildGoal?.(key);
+  };
 
   return (
     <div className="tab-content">
@@ -170,12 +145,13 @@ export default function BudgetPlanner() {
         <div className="card-title">Recommended parts by build goal</div>
         <div className="goal-grid">
           {Object.entries(BUILD_GOALS).map(([key, item]) => (
-            <button key={key} className={`goal-card ${goal===key?'active':''}`} onClick={() => setGoal(key)}>
+            <button key={key} className={`goal-card ${goal===key?'active':''}`} onClick={() => chooseGoal(key)}>
               <span>{item.label}</span>
               <strong>{item.parts.length} suggested parts</strong>
             </button>
           ))}
         </div>
+        <div className="estimate-note">Saved as this vehicle&apos;s active build goal so maintenance, alerts, and planning stay aligned.</div>
         <div className="goal-summary">
           <div>
             <div className="goal-title">{activeGoal.label}</div>

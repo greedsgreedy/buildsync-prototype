@@ -6,6 +6,7 @@ export default function Garage({ store, onNavigate }) {
   const {
     vehicles, activeVehicle, activeVehicleId, setActiveVehicleId, addVehicle, removeVehicle,
     updateVehicleProfile, addVehiclePhoto, removeVehiclePhoto, uploadVehiclePhoto, logAudit,
+    authUser, authLoading, cloudStatus,
     installedMods, totalSpent, wishlist, alerts,
   } = store;
   const [form, setForm] = useState({ year:'', make:'', model:'', trim:'', type:'Coupe', engine:'', color:'' });
@@ -49,6 +50,16 @@ export default function Garage({ store, onNavigate }) {
 
   const modelOptions = MANUFACTURER_MODELS[form.make] || [];
   const photos = activeVehicle.photos || [];
+  const primaryPhoto = photos[0] || null;
+  const isSignedIn = Boolean(authUser?.id);
+  const photoBackedByCloud = Boolean(primaryPhoto?.path);
+  const photoStorageLabel = authLoading
+    ? 'Checking account...'
+    : photoBackedByCloud
+      ? `Stored in cloud for ${authUser?.email || 'your account'}`
+      : isSignedIn
+        ? `Signed in as ${authUser?.email || 'your account'} — next upload will replace this cover photo in cloud`
+        : 'Not signed in — uploads stay on this device until you connect an account';
 
   const handleProfileSave = () => {
     updateVehicleProfile({
@@ -144,21 +155,43 @@ export default function Garage({ store, onNavigate }) {
       </div>
 
       <div className="card">
-        <div className="card-title">Garage profile</div>
+        <div className="card-title-row">
+          <div className="card-title">Garage profile</div>
+          <button
+            className={`account-link-badge ${isSignedIn ? 'on' : ''}`}
+            onClick={() => onNavigate('account')}
+            title="Open Account & sync"
+          >
+            {isSignedIn ? `Account-linked${authUser?.email ? ` · ${authUser.email}` : ''}` : 'Local-only garage'}
+          </button>
+        </div>
         <div className="profile-layout">
           <div>
-            <div className="photo-grid">
-              {photos.length === 0 ? (
-                <div className="photo-empty">Add car photos</div>
-              ) : photos.map(photo => (
-                <div key={photo.id} className="photo-tile">
-                  <img src={photo.url} alt={photo.name || 'Vehicle'} />
-                  <button className="photo-remove" onClick={() => removeVehiclePhoto(photo.id)}>×</button>
+            <div className="photo-grid single-photo-grid">
+              {!primaryPhoto ? (
+                <div className="photo-empty photo-cover-empty">
+                  <div className="photo-empty-title">Add a cover photo</div>
+                  <div className="photo-empty-sub">One garage photo per vehicle. Re-upload anytime to replace it.</div>
                 </div>
-              ))}
+              ) : (
+                <div className="photo-tile photo-cover-tile">
+                  <img src={primaryPhoto.url} alt={primaryPhoto.name || 'Vehicle'} />
+                  <button className="photo-remove" onClick={() => removeVehiclePhoto(primaryPhoto.id)}>×</button>
+                </div>
+              )}
+            </div>
+            <div className="photo-storage-card">
+              <div className="photo-storage-header">
+                <span className={`photo-storage-pill ${photoBackedByCloud ? 'cloud' : 'local'}`}>
+                  {photoBackedByCloud ? 'Cloud-backed' : 'Local only'}
+                </span>
+                <span className="photo-storage-files">PNG, JPG, JPEG, WEBP</span>
+              </div>
+              <div className="photo-storage-copy">{photoStorageLabel}</div>
+              {cloudStatus?.message && <div className="photo-storage-sync">Sync status: {cloudStatus.message}</div>}
             </div>
             <label className="btn btn-full photo-upload">
-              {photos.length ? 'Replace photo' : 'Upload photo'}
+              {primaryPhoto ? 'Replace cover photo' : 'Upload cover photo'}
               <input type="file" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp" onChange={handlePhotoUpload} />
             </label>
             {uploadStatus && <div className="estimate-note" style={{ marginTop: 8 }}>{uploadStatus}</div>}

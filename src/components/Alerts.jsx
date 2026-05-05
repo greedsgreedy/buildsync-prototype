@@ -1,6 +1,7 @@
 // src/components/Alerts.jsx
 import { useState } from 'react';
 import { PARTS, getPriceAnalytics, minPrice } from '../data';
+import { getBuildGoal, getGoalAlerts } from '../lib/buildGoals';
 
 const TYPE_META = {
   watch:   { label:'Price watch', dot:'#378ADD' },
@@ -9,9 +10,12 @@ const TYPE_META = {
 };
 
 export default function Alerts({ store }) {
-  const { alerts, addAlert, removeAlert } = store;
+  const { alerts, addAlert, removeAlert, activeVehicle } = store;
   const [form, setForm] = useState({ part:'', type:'watch' });
   const [lastRemoved, setLastRemoved] = useState(null);
+  const buildGoal = activeVehicle?.buildGoal || 'daily';
+  const goalMeta = getBuildGoal(buildGoal);
+  const suggestedAlerts = getGoalAlerts(buildGoal);
 
   const handleAdd = () => {
     if (!form.part.trim()) return;
@@ -39,6 +43,25 @@ export default function Alerts({ store }) {
             {v.label}
           </span>
         ))}
+      </div>
+
+      <div className="card">
+        <div className="filter-compact-head">
+          <div className="card-title">Suggested alerts for this build goal</div>
+          <div className="estimate-note">{goalMeta.label}</div>
+        </div>
+        <div className="estimate-note" style={{ marginBottom: 10 }}>{goalMeta.note}</div>
+        <div className="chips-row compact-chips">
+          {suggestedAlerts.map((suggestion) => (
+            <button
+              key={`${suggestion.part}-${suggestion.type}`}
+              className="chip"
+              onClick={() => addAlert({ part: suggestion.part, type: suggestion.type })}
+            >
+              + {suggestion.part} · {TYPE_META[suggestion.type]?.label || suggestion.type}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="card">

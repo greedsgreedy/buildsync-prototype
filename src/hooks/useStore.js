@@ -1,9 +1,10 @@
 // src/hooks/useStore.js
-// Central state hook — replace with Zustand or Supabase in v2
+// Central state hook with local persistence plus Supabase-backed account sync.
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { INSTALLED_MODS, PARTS, minPrice } from '../data';
 import { supabase } from '../lib/supabase';
+import { DEFAULT_BUILD_GOAL } from '../lib/buildGoals';
 
 const DEFAULT_ALERTS = [
   { id:1, part:'Pure Stage 2 Turbo', type:'restock' },
@@ -35,13 +36,20 @@ const DEFAULT_VEHICLES = [
     usageProfile: {
       style: 'street',
       climate: 'temperate',
+      oilViscosity: '0W-20',
       currentMileage: 27000,
     },
+    buildGoal: DEFAULT_BUILD_GOAL,
     serviceLog: {
       oilLast: 24000,
       brakeFluidLast: 21000,
       transFluidLast: 15000,
       coolantLast: 18000,
+      sparkPlugsLast: 0,
+      cabinFilterLast: 0,
+      engineAirFilterLast: 0,
+      diffFluidLast: 0,
+      serpBeltLast: 0,
     },
     photos: [],
     comparisonSets: [],
@@ -58,6 +66,10 @@ const DEFAULT_ACCOUNT = {
   email: '',
   cloudSync: false,
   lastSyncedAt: '',
+};
+const DEFAULT_CLOUD_STATUS = {
+  phase: 'idle',
+  message: 'Local-only mode',
 };
 const DEFAULT_CATALOG_FEED = [];
 const GARAGE_ROW_ID = 'primary';
@@ -116,13 +128,25 @@ export function useStore() {
   const [appScope, setAppScope] = useState(initial.appScope);
   const [authUser, setAuthUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [cloudStatus, setCloudStatus] = useState(DEFAULT_CLOUD_STATUS);
   const writeGuardRef = useRef(new Map());
+  const lastHydratedUserRef = useRef('');
+  const suppressCloudSaveRef = useRef(false);
+  const lastSavedCloudSnapshotRef = useRef('');
 
   const activeVehicle = vehicles.find(v => v.id === activeVehicleId) || vehicles[0];
   const installedMods = activeVehicle?.installedMods || [];
   const wishlist = activeVehicle?.wishlist || [];
   const alerts = activeVehicle?.alerts || [];
   const comparisonSets = activeVehicle?.comparisonSets || [];
+
+  const getCloudSnapshot = useCallback((override = {}) => JSON.stringify({
+    vehicles: override.vehicles || vehicles,
+    activeVehicleId: override.activeVehicleId || activeVehicleId,
+    likedBuilds: override.likedBuilds || [...likedBuilds],
+    catalogFeed: override.catalogFeed || catalogFeed,
+    appScope: override.appScope || appScope,
+  }), [vehicles, activeVehicleId, likedBuilds, catalogFeed, appScope]);
 
   const logAudit = useCallback(async (action, details = {}) => {
     if (!authUser?.id) return;
@@ -165,13 +189,20 @@ export function useStore() {
       usageProfile: vehicle.usageProfile || {
         style: 'street',
         climate: 'temperate',
+        oilViscosity: '0W-20',
         currentMileage: 0,
       },
+      buildGoal: vehicle.buildGoal || DEFAULT_BUILD_GOAL,
       serviceLog: vehicle.serviceLog || {
         oilLast: 0,
         brakeFluidLast: 0,
         transFluidLast: 0,
         coolantLast: 0,
+        sparkPlugsLast: 0,
+        cabinFilterLast: 0,
+        engineAirFilterLast: 0,
+        diffFluidLast: 0,
+        serpBeltLast: 0,
       },
       photos: vehicle.photos || [],
       comparisonSets: vehicle.comparisonSets || [],
@@ -202,6 +233,13 @@ export function useStore() {
       fitment: { ...vehicle.fitment, ...(profile.fitment || {}) },
       usageProfile: { ...vehicle.usageProfile, ...(profile.usageProfile || {}) },
       serviceLog: { ...vehicle.serviceLog, ...(profile.serviceLog || {}) },
+    }));
+  }, [updateActiveVehicle]);
+
+  const setBuildGoal = useCallback((goal) => {
+    updateActiveVehicle(vehicle => ({
+      ...vehicle,
+      buildGoal: goal,
     }));
   }, [updateActiveVehicle]);
 
@@ -377,6 +415,39 @@ export function useStore() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!authUser) {
+      lastHydratedUserRef.current = '';
+      suppressCloudSaveRef.current = false;
+      lastSavedCloudSnapshotRef.current = '';
+      setAccount(prev => ({
+        ...prev,
+        mode: 'guest',
+        cloudSync: false,
+      }));
+      setCloudStatus(DEFAULT_CLOUD_STATUS);
+      return;
+    }
+
+    const nextName = account.name && account.name !== 'Guest'
+      ? account.name
+      : authUser.user_metadata?.display_name
+        || authUser.user_metadata?.name
+        || authUser.email?.split('@')[0]
+        || 'Driver';
+
+    setAccount(prev => ({
+      ...prev,
+      mode: 'account',
+      name: nextName,
+      email: authUser.email || prev.email,
+      cloudSync: prev.cloudSync || true,
+    }));
+    setCloudStatus(prev => (prev.phase === 'idle'
+      ? { phase: 'ready', message: 'Account connected' }
+      : prev));
+  }, [authUser, account.name]);
+
   const upgradeToAccount = useCallback(({ name, email }) => {
     setAccount(prev => ({
       ...prev,
@@ -449,18 +520,24 @@ export function useStore() {
   const clearCatalogFeed = useCallback(() => setCatalogFeed(DEFAULT_CATALOG_FEED), []);
 
   const signInWithEmailOtp = useCallback(async (email) => {
-    const { error } = await supabase.auth.signInWithOtp({ email });
+    const redirectTo = typeof window !== 'undefined' ? window.location.origin : undefined;
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: { emailRedirectTo: redirectTo },
+    });
     if (error) return { ok: false, error: error.message };
+    setCloudStatus({ phase: 'auth', message: 'Magic link sent. Finish sign-in from your email.' });
     return { ok: true };
   }, []);
 
   const signOut = useCallback(async () => {
     const { error } = await supabase.auth.signOut();
     if (error) return { ok: false, error: error.message };
+    setCloudStatus({ phase: 'idle', message: 'Signed out. Local save still available.' });
     return { ok: true };
   }, []);
 
-  const saveCloudGarage = useCallback(async () => {
+  const saveCloudGarage = useCallback(async ({ silent = false } = {}) => {
     if (!authUser?.id) return { ok: false, error: 'Sign in required' };
     const payload = {
       user_id: authUser.id,
@@ -477,11 +554,15 @@ export function useStore() {
       .upsert(payload, { onConflict: 'user_id,garage_id' });
     if (error) return { ok: false, error: error.message };
     await logAudit('garage_save', { vehicleCount: vehicles.length });
+    lastSavedCloudSnapshotRef.current = getCloudSnapshot();
     setAccount(prev => ({ ...prev, cloudSync: true, lastSyncedAt: new Date().toISOString() }));
+    if (!silent) {
+      setCloudStatus({ phase: 'saved', message: 'Cloud sync complete' });
+    }
     return { ok: true };
-  }, [authUser?.id, vehicles, activeVehicleId, likedBuilds, catalogFeed, appScope, logAudit]);
+  }, [authUser?.id, vehicles, activeVehicleId, likedBuilds, catalogFeed, appScope, logAudit, getCloudSnapshot]);
 
-  const loadCloudGarage = useCallback(async () => {
+  const loadCloudGarage = useCallback(async ({ silent = false } = {}) => {
     if (!authUser?.id) return { ok: false, error: 'Sign in required' };
     const { data, error } = await supabase
       .from('garage_profiles')
@@ -490,16 +571,84 @@ export function useStore() {
       .eq('garage_id', GARAGE_ROW_ID)
       .maybeSingle();
     if (error) return { ok: false, error: error.message };
-    if (!data) return { ok: true, empty: true };
+    if (!data) {
+      if (!silent) {
+        setCloudStatus({ phase: 'empty', message: 'No cloud garage found yet' });
+      }
+      return { ok: true, empty: true };
+    }
     const nextVehicles = Array.isArray(data.vehicles) && data.vehicles.length ? data.vehicles : DEFAULT_VEHICLES;
     setVehicles(nextVehicles);
     setActiveVehicleId(data.active_vehicle_id || nextVehicles[0].id);
     setLikedBuilds(new Set(data.liked_builds || []));
     setCatalogFeed(Array.isArray(data.catalog_feed) ? data.catalog_feed : DEFAULT_CATALOG_FEED);
     setAppScope(data.app_scope || 'supra_bmw');
+    lastSavedCloudSnapshotRef.current = JSON.stringify({
+      vehicles: nextVehicles,
+      activeVehicleId: data.active_vehicle_id || nextVehicles[0].id,
+      likedBuilds: data.liked_builds || [],
+      catalogFeed: Array.isArray(data.catalog_feed) ? data.catalog_feed : DEFAULT_CATALOG_FEED,
+      appScope: data.app_scope || 'supra_bmw',
+    });
     setAccount(prev => ({ ...prev, cloudSync: true, lastSyncedAt: new Date().toISOString() }));
+    if (!silent) {
+      setCloudStatus({ phase: 'loaded', message: 'Cloud garage loaded' });
+    }
     return { ok: true };
   }, [authUser?.id]);
+
+  useEffect(() => {
+    if (!authUser?.id) return;
+    if (lastHydratedUserRef.current === authUser.id) return;
+
+    let cancelled = false;
+    lastHydratedUserRef.current = authUser.id;
+    suppressCloudSaveRef.current = true;
+
+    (async () => {
+      setCloudStatus({ phase: 'loading', message: 'Loading your garage from cloud…' });
+      const result = await loadCloudGarage({ silent: true });
+      if (cancelled) return;
+
+      if (result.ok && result.empty) {
+        setCloudStatus({ phase: 'ready', message: 'No cloud garage yet. Your local garage will become your cloud garage.' });
+        const seeded = await saveCloudGarage({ silent: true });
+        if (!cancelled) {
+          setCloudStatus(seeded.ok
+            ? { phase: 'saved', message: 'Cloud garage created from your current local build.' }
+            : { phase: 'error', message: seeded.error || 'Cloud garage setup failed' });
+        }
+      } else if (result.ok) {
+        setCloudStatus({ phase: 'loaded', message: 'Cloud garage loaded for this account.' });
+      } else {
+        setCloudStatus({ phase: 'error', message: result.error || 'Cloud sync failed to load' });
+      }
+
+      suppressCloudSaveRef.current = false;
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authUser?.id, loadCloudGarage, saveCloudGarage]);
+
+  useEffect(() => {
+    if (!authUser?.id || !account.cloudSync) return;
+    if (suppressCloudSaveRef.current) return;
+
+    const snapshot = getCloudSnapshot();
+    if (snapshot === lastSavedCloudSnapshotRef.current) return;
+
+    const timer = window.setTimeout(async () => {
+      setCloudStatus({ phase: 'saving', message: 'Syncing garage changes…' });
+      const result = await saveCloudGarage({ silent: true });
+      setCloudStatus(result.ok
+        ? { phase: 'saved', message: 'Garage synced to cloud.' }
+        : { phase: 'error', message: result.error || 'Cloud sync failed' });
+    }, 900);
+
+    return () => window.clearTimeout(timer);
+  }, [authUser?.id, account.cloudSync, getCloudSnapshot, saveCloudGarage]);
 
   const uploadVehiclePhoto = useCallback(async (file) => {
     if (!file) return { ok: false, error: 'No file selected' };
@@ -561,11 +710,12 @@ export function useStore() {
     wishlist, toggleWishlist, removeFromWishlist, isInWishlist, wishlistTotal,
     alerts, addAlert, removeAlert, quickAlert,
     comparisonSets, saveComparisonSet, removeComparisonSet,
+    setBuildGoal,
     likedBuilds, toggleLike,
     catalogFeed, importCatalogFeedRows, clearCatalogFeed,
     appScope, setAppScope,
     account, upgradeToAccount, setGuestMode, toggleCloudSync, createSyncBundle, restoreSyncBundle,
-    authUser, authLoading, signInWithEmailOtp, signOut, saveCloudGarage, loadCloudGarage, uploadVehiclePhoto, logAudit, auditAction,
+    authUser, authLoading, cloudStatus, signInWithEmailOtp, signOut, saveCloudGarage, loadCloudGarage, uploadVehiclePhoto, logAudit, auditAction,
     totalSpent,
   };
 }

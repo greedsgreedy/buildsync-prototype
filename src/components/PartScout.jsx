@@ -57,6 +57,7 @@ export default function PartScout({ store }) {
   const [openFilters, setOpenFilters] = useState({ brands: true, parts: true, scope: false });
   const [selectedIds, setSelectedIds] = useState([]);
   const [comparisonName, setComparisonName] = useState('');
+  const [detailPart, setDetailPart] = useState(null);
 
   const activeVin = activeVehicle?.fitment?.vin || '';
 
@@ -144,6 +145,8 @@ export default function PartScout({ store }) {
     clearFilters();
     setSelectedIds([]);
   };
+  const openDetail = (part) => setDetailPart(part);
+  const closeDetail = () => setDetailPart(null);
 
   const toggleSelect = (partId) => {
     setSelectedIds((prev) => prev.includes(partId) ? prev.filter((id) => id !== partId) : [...prev, partId].slice(-6));
@@ -324,7 +327,18 @@ export default function PartScout({ store }) {
           const selected = selectedIds.includes(part.id);
           return (
             <div className="partscout-row" key={part.id}>
-              <div className="partscout-row-head">
+              <div
+                className="partscout-row-head partscout-clickable-head"
+                role="button"
+                tabIndex={0}
+                onClick={() => openDetail(part)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    openDetail(part);
+                  }
+                }}
+              >
                 <div>
                   <div className="quick-result-title">{part.name}</div>
                   <div className="partscout-meta-row">
@@ -347,7 +361,10 @@ export default function PartScout({ store }) {
                 </div>
                 <div className="partscout-row-side">
                   {lowest !== null && <div className="row-value">from ${lowest.toLocaleString()}</div>}
-                  <button className={`pbtn ${selected ? 'saved' : ''}`} onClick={() => toggleSelect(part.id)}>
+                  <button className="pbtn" onClick={(e) => { e.stopPropagation(); openDetail(part); }}>
+                    Fitment details
+                  </button>
+                  <button className={`pbtn ${selected ? 'saved' : ''}`} onClick={(e) => { e.stopPropagation(); toggleSelect(part.id); }}>
                     {selected ? 'Selected' : 'Select'}
                   </button>
                 </div>
@@ -411,6 +428,14 @@ export default function PartScout({ store }) {
           );
         })}
       </div>
+
+      {detailPart && (
+        <FitmentDetailDrawer
+          part={detailPart}
+          activeVehicle={activeVehicle}
+          onClose={closeDetail}
+        />
+      )}
     </div>
   );
 }
@@ -424,6 +449,88 @@ function FilterSection({ title, value, open, onToggle, children }) {
         <em>{open ? '−' : '+'}</em>
       </button>
       {open && <div className="filter-body">{children}</div>}
+    </div>
+  );
+}
+
+function FitmentDetailDrawer({ part, activeVehicle, onClose }) {
+  const fitment = part.fitment || {};
+  const vehicleLabel = [activeVehicle?.year, activeVehicle?.make, activeVehicle?.model, activeVehicle?.trim]
+    .filter(Boolean)
+    .join(' ');
+  const detailSections = [
+    { title: 'Why it matched', items: fitment.matchedRules || [] },
+    { title: 'Still needs verification', items: fitment.verificationChecks || [] },
+    { title: 'Install notes', items: fitment.installNotes || [] },
+    { title: 'Supporting mods / prep', items: fitment.supportingMods || [] },
+  ];
+
+  return (
+    <div className="drawer-backdrop" onClick={onClose}>
+      <div className="drawer-sheet" onClick={(e) => e.stopPropagation()}>
+        <div className="filter-compact-head">
+          <div>
+            <div className="card-title">Fitment detail</div>
+            <div className="quick-result-title">{part.name}</div>
+            <div className="estimate-note">{vehicleLabel} · {activeVehicle?.engine}</div>
+          </div>
+          <button className="rm-btn" onClick={onClose}>Close</button>
+        </div>
+
+        <div className="partscout-detail-summary">
+          <span className={`fitment-badge fitment-${String(fitment.label || 'needs verification').toLowerCase().replace(/\s+/g, '-')}`}>
+            {fitment.label || 'Needs verification'}
+          </span>
+          <span className="estimate-note">{fitment.score || 0} confidence · {fitment.reason || 'Review fitment notes'}</span>
+        </div>
+
+        <div className="fitment-sub-badges">
+          {(fitment.badges || []).map((badge, index) => (
+            <span
+              key={`${part.id}-drawer-${badge.label}-${index}`}
+              className={`fitment-sub-badge fitment-sub-badge-${badge.tone || 'neutral'}`}
+            >
+              {badge.label}
+            </span>
+          ))}
+        </div>
+
+        <div className="drawer-rule-grid">
+          <div className="drawer-rule-card">
+            <div className="card-title">Vehicle rules used</div>
+            <div className="recommend-list">
+              <div className="recommend-row"><span className="rec-check on">✓</span><span className="rec-name">Trim: {activeVehicle?.trim || 'Not set'}</span></div>
+              <div className="recommend-row"><span className="rec-check on">✓</span><span className="rec-name">Transmission: {activeVehicle?.fitment?.transmission || 'Not set'}</span></div>
+              <div className="recommend-row"><span className="rec-check on">✓</span><span className="rec-name">Emissions: {activeVehicle?.fitment?.emissions || 'Not set'}</span></div>
+              <div className="recommend-row"><span className="rec-check on">✓</span><span className="rec-name">Brake package: {activeVehicle?.fitment?.brakePackage || 'Not set'}</span></div>
+            </div>
+          </div>
+          <div className="drawer-rule-card">
+            <div className="card-title">Vendor context</div>
+            <div className="estimate-note">Source confidence improves when platform, transmission, and emissions clues line up with the active garage vehicle.</div>
+          </div>
+        </div>
+
+        <div className="drawer-sections">
+          {detailSections.map((section) => (
+            <div className="drawer-rule-card" key={section.title}>
+              <div className="card-title">{section.title}</div>
+              {section.items.length === 0 ? (
+                <div className="estimate-note">No extra notes here yet.</div>
+              ) : (
+                <div className="recommend-list">
+                  {section.items.map((item) => (
+                    <div className="recommend-row" key={`${section.title}-${item}`}>
+                      <span className="rec-check on">✓</span>
+                      <span className="rec-name">{item}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

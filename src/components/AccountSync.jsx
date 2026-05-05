@@ -5,6 +5,7 @@ export default function AccountSync({ store }) {
     account,
     authUser,
     authLoading,
+    cloudStatus,
     vehicles,
     upgradeToAccount,
     setGuestMode,
@@ -84,26 +85,27 @@ export default function AccountSync({ store }) {
         {authUser && <div className="list-row"><span className="row-name">User id</span><span className="row-value">{authUser.id.slice(0, 8)}...</span></div>}
         <div className="list-row"><span className="row-name">Profile</span><span className="row-value">{account.name || 'Guest'} {account.email ? `(${account.email})` : ''}</span></div>
         <div className="list-row"><span className="row-name">Cloud sync</span><span className="row-value">{account.cloudSync ? 'Enabled' : 'Disabled'}</span></div>
+        <div className="list-row"><span className="row-name">Sync status</span><span className="row-value">{cloudStatus?.message || 'Local-only mode'}</span></div>
         <div className="list-row"><span className="row-name">Last sync</span><span className="row-value">{account.lastSyncedAt ? new Date(account.lastSyncedAt).toLocaleString() : 'Not synced yet'}</span></div>
       </div>
 
       <div className="card">
-        <div className="card-title">Create account profile</div>
+        <div className="card-title">Sign in and sync</div>
         <div className="form-grid">
           <input className="input" placeholder="Display name" value={form.name} onChange={e => setForm(p => ({ ...p, name:e.target.value }))} />
           <input className="input" placeholder="Email address" value={form.email} onChange={e => setForm(p => ({ ...p, email:e.target.value }))} />
-          <button className="btn btn-yellow span-2" onClick={handleUpgrade}>Use account mode</button>
+          <button className="btn btn-yellow span-2" onClick={handleUpgrade}>Use account mode on this device</button>
         </div>
         <div className="shop-actions" style={{marginTop:10}}>
-          <button className="pbtn" onClick={handleSignIn}>Email sign in (magic link)</button>
+          <button className="pbtn" onClick={handleSignIn}>Send magic sign-in link</button>
           {authUser && <button className="pbtn" onClick={handleSignOut}>Sign out</button>}
           <button className="pbtn" onClick={toggleCloudSync}>{account.cloudSync ? 'Disable cloud sync' : 'Enable cloud sync'}</button>
-          <button className="pbtn" onClick={handleCloudSave}>Save to cloud</button>
-          <button className="pbtn" onClick={handleCloudLoad}>Load from cloud</button>
+          <button className="pbtn" onClick={handleCloudSave}>Sync now</button>
+          <button className="pbtn" onClick={handleCloudLoad}>Pull latest from cloud</button>
           <button className="pbtn" onClick={setGuestMode}>Switch to guest</button>
         </div>
         <div className="estimate-note">
-          This prototype uses local persistence and portable sync bundles. Production would replace this with real auth and encrypted cloud sync.
+          Signed-in users now sync their garage to Supabase automatically. Manual sync controls stay here so you can force a save or pull the latest cloud garage whenever you want.
         </div>
       </div>
 

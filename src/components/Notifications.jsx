@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { PARTS, getPriceAnalytics, minPrice } from '../data';
+import { getMileageRecommendations, getOilServicePlan } from '../lib/mileageRecommendations';
 
 function daysBetween(dateA, dateB) {
   return Math.floor((dateA.getTime() - dateB.getTime()) / (1000 * 60 * 60 * 24));
@@ -27,13 +28,31 @@ export default function Notifications({ store }) {
     const usage = activeVehicle.usageProfile || {};
     const service = activeVehicle.serviceLog || {};
     const mileage = Number(usage.currentMileage || 0);
-    const oilDue = (Number(service.oilLast || 0) + 5000) - mileage;
+    const mileageRecs = getMileageRecommendations(activeVehicle, service, mileage);
+    const oilPlan = getOilServicePlan(activeVehicle, usage, installedMods);
+    const oilDue = (Number(service.oilLast || 0) + oilPlan.adjustedMiles) - mileage;
     if (oilDue <= 400) {
       list.push({
         type: 'maintenance',
         priority: 1,
-        title: oilDue <= 0 ? 'Oil service overdue' : 'Oil service due soon',
-        body: oilDue <= 0 ? `${Math.abs(oilDue).toLocaleString()} miles overdue.` : `${oilDue.toLocaleString()} miles remaining.`,
+        title: oilDue <= 0 ? `${oilPlan.viscosity} oil service overdue` : `${oilPlan.viscosity} oil service due soon`,
+        body: oilDue <= 0
+          ? `${Math.abs(oilDue).toLocaleString()} miles overdue on the current ${oilPlan.viscosity} service cadence.`
+          : `${oilDue.toLocaleString()} miles remaining on the current ${oilPlan.viscosity} service cadence.`,
+      });
+    }
+
+    const dueReplacement = mileageRecs.visible.find(item => item.status === 'due') || mileageRecs.visible[0];
+    if (dueReplacement) {
+      list.push({
+        type: 'mileage-service',
+        priority: dueReplacement.status === 'due' ? 1 : 2,
+        title: dueReplacement.status === 'due'
+          ? `${dueReplacement.label} service window reached`
+          : `${dueReplacement.label} coming up soon`,
+        body: dueReplacement.status === 'due'
+          ? `${Math.abs(dueReplacement.remaining).toLocaleString()} miles past the ${dueReplacement.nextDue.toLocaleString()} mi target.`
+          : `${dueReplacement.remaining.toLocaleString()} miles until the ${dueReplacement.nextDue.toLocaleString()} mi target.`,
       });
     }
 
@@ -86,4 +105,3 @@ export default function Notifications({ store }) {
     </div>
   );
 }
-
