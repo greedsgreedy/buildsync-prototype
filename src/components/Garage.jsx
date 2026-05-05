@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { MANUFACTURER_MODELS, POPULAR_BRANDS, VEHICLE_TYPES } from '../data';
+import { getMileageRecommendations, getOilServicePlan } from '../lib/mileageRecommendations';
 
 // src/components/Garage.jsx
 export default function Garage({ store, onNavigate }) {
@@ -21,6 +22,37 @@ export default function Garage({ store, onNavigate }) {
   const [vinDraft, setVinDraft] = useState(activeVehicle.fitment?.vin || '');
   const [vinSavedFor, setVinSavedFor] = useState('');
   const [uploadStatus, setUploadStatus] = useState('');
+  const usage = activeVehicle.usageProfile || {};
+  const service = activeVehicle.serviceLog || {};
+  const currentMileage = Number(usage.currentMileage || 0);
+  const mileageRecs = getMileageRecommendations(activeVehicle, service, currentMileage);
+  const oilPlan = getOilServicePlan(activeVehicle, usage, installedMods);
+  const oilDue = (Number(service.oilLast || 0) + oilPlan.adjustedMiles) - currentMileage;
+  const overviewMaintenance = useMemo(() => ([
+    {
+      key: 'oil',
+      label: `Engine oil (${oilPlan.viscosity})`,
+      status: oilDue <= 0 ? 'due' : oilDue <= 800 ? 'soon' : 'ok',
+      body: oilDue <= 0
+        ? `${Math.abs(oilDue).toLocaleString()} mi overdue`
+        : `${oilDue.toLocaleString()} mi until next service`,
+      sourceLabel: oilPlan.sourceLabel,
+    },
+    ...mileageRecs.visible.slice(0, 3).map((item) => ({
+      key: item.key,
+      label: item.label,
+      status: item.status,
+      body: item.status === 'due'
+        ? `${Math.abs(item.remaining).toLocaleString()} mi overdue`
+        : `${item.remaining.toLocaleString()} mi until ${item.nextDue.toLocaleString()} mi`,
+      sourceLabel: item.sourceLabel || 'Owner pattern',
+    })),
+  ]), [mileageRecs.visible, oilDue, oilPlan.sourceLabel, oilPlan.viscosity]);
+  const maintenanceCounts = useMemo(() => ({
+    due: overviewMaintenance.filter((item) => item.status === 'due').length,
+    soon: overviewMaintenance.filter((item) => item.status === 'soon').length,
+    ok: overviewMaintenance.filter((item) => item.status === 'ok').length,
+  }), [overviewMaintenance]);
 
   useEffect(() => {
     setProfile({
@@ -272,6 +304,58 @@ export default function Garage({ store, onNavigate }) {
         <StatCard value={`$${totalSpent.toLocaleString()}`} label="Total invested" />
         <StatCard value={wishlist.length} label="Wishlist items" />
         <StatCard value={alerts.length} label="Active alerts" />
+      </div>
+
+      <div className="card">
+        <div className="card-title-row">
+          <div className="card-title">Maintenance snapshot</div>
+          <button className="pbtn" onClick={() => onNavigate('maintenance')}>Open maintenance</button>
+        </div>
+        <div className="goal-note" style={{ marginBottom: 10 }}>
+          Current mileage: <strong>{currentMileage.toLocaleString()} mi</strong> · Profile: <strong>{mileageRecs.profileName}</strong>
+        </div>
+        <div className="maintenance-summary-grid">
+          <div className={`maintenance-summary-card ${maintenanceCounts.due ? 'warn' : ''}`}>
+            <strong>{maintenanceCounts.due}</strong>
+            <span>Due now</span>
+          </div>
+          <div className={`maintenance-summary-card ${maintenanceCounts.soon ? 'soon' : ''}`}>
+            <strong>{maintenanceCounts.soon}</strong>
+            <span>Coming up</span>
+          </div>
+          <div className="maintenance-summary-card">
+            <strong>{oilPlan.viscosity}</strong>
+            <span>Oil plan</span>
+          </div>
+          <div className="maintenance-summary-card">
+            <strong>{oilPlan.adjustedMiles.toLocaleString()} mi</strong>
+            <span>Oil interval</span>
+          </div>
+        </div>
+        <div className="recommend-list">
+          {overviewMaintenance.map((item) => (
+            <div key={item.key} className="recommend-row recommend-row-stack">
+              <span className={`rec-check ${item.status === 'due' ? 'warn' : item.status === 'soon' ? 'soon' : 'on'}`}>
+                {item.status === 'due' ? '!' : item.status === 'soon' ? '↗' : '✓'}
+              </span>
+              <div className="recommend-main">
+                <div className="recommend-head">
+                  <span className="rec-name">{item.label}</span>
+                  <div className="recommend-pill-row">
+                    <span className={`source-pill ${item.sourceLabel === 'Manufacturer baseline' ? 'manufacturer' : 'community'}`}>{item.sourceLabel}</span>
+                    <span className={`status-pill ${item.status === 'ok' ? 'soon' : item.status}`}>{item.status === 'due' ? 'Due now' : item.status === 'soon' ? 'Coming up' : 'In range'}</span>
+                  </div>
+                </div>
+                <div className="alert-price-meta">{item.body}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+        {mileageRecs.visible.length === 0 && oilDue > 800 && (
+          <div className="empty-state" style={{ marginTop: 10 }}>
+            Nothing urgent right now. You&apos;re ahead of the common maintenance windows.
+          </div>
+        )}
       </div>
 
       <div className="card">
